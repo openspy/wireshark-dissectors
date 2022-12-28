@@ -121,16 +121,7 @@ static hf_register_info nn_fields_hf[] = {
     },
 };
 
-void proto_register_natneg(void)
-{
-    proto_natneg = proto_register_protocol(
-        "GS NatNeg",        /* name        */
-        "natneg",          /* short name  */
-        "gs_natneg"        /* filter_name */
-    );
-    proto_register_field_array(proto_natneg, nn_fields_hf, array_length(nn_fields_hf));
-    proto_register_subtree_array(natneg_etts, array_length(natneg_etts));
-}
+
 static gboolean
 test_natneg(packet_info* pinfo _U_, tvbuff_t* tvb, int offset _U_, void* data _U_)
 {
@@ -165,16 +156,27 @@ dissect_natneg_heur_udp(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree, voi
     return FALSE;
 }
 
+void proto_register_natneg(void)
+{
+    proto_natneg = proto_register_protocol(
+        "GS NatNeg",        /* name        */
+        "natneg",          /* short name  */
+        "gs_natneg"        /* filter_name */
+    );
+    proto_register_field_array(proto_natneg, nn_fields_hf, array_length(nn_fields_hf));
+    proto_register_subtree_array(natneg_etts, array_length(natneg_etts));
+}
+
 void proto_reg_handoff_natneg(void)
 {
     static dissector_handle_t natneg_handle;
 
     natneg_handle = create_dissector_handle(dissect_natneg, proto_natneg);
-    //dissector_add_uint("udp.port", DEFAULT_NATNEG_PORT, natneg_handle);
 
     heur_dissector_add("udp", dissect_natneg_heur_udp, "GameSpy NatNeg",
         "gs_natneg", proto_natneg, HEURISTIC_ENABLE);
 }
+
 
 void plugin_register_natneg(void) {
     static proto_plugin natneg_plug;

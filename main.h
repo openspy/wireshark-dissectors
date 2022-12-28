@@ -18,4 +18,5 @@
 #define VERSION "0.0.1"
 #endif
 
+const char** gslist_keys_find_by_gamename(const char* name, int len);
 #endif //_MAIN_H
