@@ -14,18 +14,21 @@ int natneg_version_field = -1;
 int natneg_packettype_field = -1;
 int natneg_cookie_field = -1;
 
+
 //nn init
 int natneg_init_porttype_field = -1;
 int natneg_init_clientindex_field = -1;
 int natneg_init_usegameport_field = -1;
 int natneg_init_localip_field = -1;
 int natneg_init_localport_field = -1;
+int natneg_init_gamename = -1;
 
 //nn connect
 int natneg_connect_remoteip_field = -1;
 int natneg_connect_remoteport_field = -1;
 int natneg_connect_gotyourdata_field = -1;
 int natneg_connect_finished_field = -1;
+
 
 static hf_register_info nn_fields_hf[] = {
     { &natneg_magic_field,
@@ -84,6 +87,13 @@ static hf_register_info nn_fields_hf[] = {
         NULL, 0x0,
         NULL, HFILL }
     },
+    { &natneg_init_gamename,
+        { "gamename ", "gs_natneg.init.gamename",
+        FT_STRINGZ, BASE_NONE,
+        NULL, 0x0,
+        NULL, HFILL }
+    },
+
     //nn connect
     { &natneg_connect_remoteip_field,
         { "remoteip", "gs_natneg.connect.remoteip",

@@ -1,16 +1,23 @@
 #include "natneg.h"
-int dissect_natneg_init(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int offset) {
+int dissect_natneg_init(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int offset, int do_read_gamename) {
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "NN Init");
     proto_tree_add_item(tree, natneg_init_porttype_field, tvb, offset, sizeof(uint8_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint8_t);
     proto_tree_add_item(tree, natneg_init_clientindex_field, tvb, offset, sizeof(uint8_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint8_t);
     proto_tree_add_item(tree, natneg_init_usegameport_field, tvb, offset, sizeof(uint8_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint8_t);
     proto_tree_add_item(tree, natneg_init_localip_field, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN); offset += sizeof(uint32_t);
     proto_tree_add_item(tree, natneg_init_localport_field, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN); offset += sizeof(uint16_t);
+
+
+    if (do_read_gamename) {
+        int remaining = tvb_captured_length_remaining(tvb, offset);
+        proto_tree_add_item(tree, natneg_init_gamename, tvb, offset, remaining, ENC_BIG_ENDIAN);
+    }
+    
     return tvb_captured_length(tvb);
 
 }
 int dissect_natneg_init_ack(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int offset) {
-    int result = dissect_natneg_init(tvb, pinfo, tree, data, offset);
+    int result = dissect_natneg_init(tvb, pinfo, tree, data, offset, 0);
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "NN Init Ack");
     return result;
 }
@@ -52,9 +59,11 @@ int dissect_natneg(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void
     proto_tree_add_item_ret_uint(tree, natneg_packettype_field, tvb, offset, sizeof(uint8_t), ENC_LITTLE_ENDIAN, &nn_packettype); offset += sizeof(uint8_t);
     proto_tree_add_item(tree, natneg_cookie_field, tvb, offset, sizeof(uint32_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint32_t);
 
+    int do_read_gamename = nn_version > 1;
+
     switch (nn_packettype) {
         case NN_INIT:
-            return dissect_natneg_init(tvb, pinfo, tree, data, offset);
+            return dissect_natneg_init(tvb, pinfo, tree, data, offset, do_read_gamename);
             break;
         case NN_INITACK:
             return dissect_natneg_init_ack(tvb, pinfo, tree, data, offset);

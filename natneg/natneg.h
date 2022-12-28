@@ -46,6 +46,7 @@ extern int natneg_init_clientindex_field;
 extern int natneg_init_usegameport_field;
 extern int natneg_init_localip_field;
 extern int natneg_init_localport_field;
+extern int natneg_init_gamename;
 
 //nn connect
 extern int natneg_connect_remoteip_field;
