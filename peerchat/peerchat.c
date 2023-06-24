@@ -231,7 +231,7 @@ int dissect_peerchat(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, vo
     tvbuff_t* decrypted_tvb = tvb_new_child_real_data(tvb, decrypted_heap_buffer, decrypted_length, decrypted_length);
     add_new_data_source(pinfo, decrypted_tvb, "Decrypted Data");
     
-    call_dissector(irc_handle, decrypted_tvb, pinfo, tree, data);
+    call_dissector(irc_handle, decrypted_tvb, pinfo, tree);
 
     return tvb_captured_length(tvb);
 }
@@ -241,7 +241,7 @@ void proto_register_peerchat(void)
     proto_peerchat = proto_register_protocol(
         "GS Peerchat",        /* name        */
         "peerchat",          /* short name  */
-        "gs_perchat"        /* filter_name */
+        "gs_peerchat"        /* filter_name */
     );
     proto_register_field_array(proto_peerchat, peerchat_fields_hf, array_length(peerchat_fields_hf));
     proto_register_subtree_array(peerchat_etts, array_length(peerchat_etts));
