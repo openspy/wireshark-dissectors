@@ -17,7 +17,6 @@
 
 #define DEFAULT_MS_PORT 28902
 
-
 #ifndef VERSION
 #define VERSION "0.0.0"
 #endif

@@ -1408,7 +1408,16 @@
         dissector_add_uint("tcp.port", DEFAULT_MS_PORT, utms_handle);
 
         utquery_handle = create_dissector_handle(dissect_ut_query, proto_utms);
-        dissector_add_uint("udp.port", 7778, utquery_handle);
+
+        uint16_t query_ports[] = {
+            7777,
+            7778,
+            7788
+        };
+
+        for(int i=0;i<sizeof(query_ports) / sizeof(uint16_t); i++) {
+            dissector_add_uint("udp.port", query_ports[i], utquery_handle);
+        }        
     }
 
 

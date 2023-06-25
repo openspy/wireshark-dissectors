@@ -46,13 +46,13 @@ static hf_register_info sbv1_fields_hf[] = {
         NULL, HFILL }
     },
     { &sbv1_server_cmp_resp_ip,
-        { "server.cmplist.ip", "sbv1.server.cmplist.ip",
+        { "ip", "sbv1.server.cmplist.ip",
         FT_IPv4, BASE_NONE,
         NULL, 0x0,
         NULL, HFILL }
     },
     { &sbv1_server_cmp_resp_port,
-        { "server.cmplist.port", "sbv1.server.cmplist.port",
+        { "port", "sbv1.server.cmplist.port",
         FT_UINT16, BASE_DEC,
         NULL, 0x0,
         NULL, HFILL }
@@ -77,6 +77,7 @@ typedef struct _sbv1_conv_t {
 
     const char *server_challenge;
     const char *client_validation;
+    const char *challenge_expected;
 } sbv1_conv_t;
 static gint* sbv1_etts[] = {
     &proto_sbv1_ett
@@ -145,6 +146,13 @@ int dissect_sbv1_client_validation(tvbuff_t* tvb, packet_info* pinfo, proto_tree
 
     conv->query_from_game = gslist_keys_find_by_gamename(gamename, end);
 
+    if(strstr((const char *)buff,"\\enctype\\2") != NULL) {
+        conv->enctype = 2;
+    } else if(strstr((const char *)buff,"\\enctype\\1") != NULL) {
+        conv->enctype = 1;
+    }
+
+
     //extract validate response
     s = strstr((const char *)buff,"\\validate\\");
     if(s == NULL) {
@@ -166,13 +174,15 @@ int dissect_sbv1_client_validation(tvbuff_t* tvb, packet_info* pinfo, proto_tree
     }
 
     char challenge_resp[90] = { 0 };
-    proto_tree_add_string(tree, sbv1_client_validation_expected, tvb, offset, end, conv->server_challenge);
-    gsseckey((unsigned char *)&challenge_resp, (const unsigned char *)conv->server_challenge, (const unsigned char *)conv->query_from_game[2], 0);
+    gsseckey((unsigned char *)&challenge_resp, (const unsigned char *)conv->server_challenge, (const unsigned char *)conv->query_from_game[2], conv->enctype);
 
+    if(conv->challenge_expected == NULL) {
+        conv->challenge_expected = strdup(challenge_resp);
+    }
+    proto_tree_add_string(tree, sbv1_client_validation_expected, tvb, offset, end, conv->challenge_expected);
     if(strcmp(challenge_resp, (const unsigned char *)conv->client_validation) == 0) {
         proto_tree_add_boolean(tree, sbv1_validation_status, tvb, offset, end, 1);
     } else {
-        proto_tree_add_string(tree, sbv1_client_validation_expected, tvb, offset, end, challenge_resp);
         proto_tree_add_boolean(tree, sbv1_validation_status, tvb, offset, end, 0);
     }
 
@@ -193,6 +203,29 @@ int dissect_sbv1_query_response_cmp_list(tvbuff_t* tvb, packet_info* pinfo, prot
 }
 int dissect_sbv1_query_response(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_) {
     sbv1_conv_t* conv = get_sbv1_conversation_data(pinfo);
+
+    if(conv->enctype != 0) {
+        guint16 original_length = tvb_captured_length_remaining(tvb, 0);
+        const char* original_buffer = (const char*)tvb_get_ptr(tvb, 0, original_length);
+
+        guchar* decrypted_heap_buffer = (guchar*)wmem_alloc(pinfo->pool, original_length);
+        memcpy(decrypted_heap_buffer, original_buffer, original_length);
+        
+        int dec_len;
+        switch(conv->enctype) {
+            case 1:
+                    dec_len = enctype1_wrapper(conv->query_from_game[2], decrypted_heap_buffer, original_length);
+            break;
+            case 2:
+                    dec_len = enctype2_wrapper(conv->query_from_game[2], decrypted_heap_buffer, original_length);
+            break;
+        }
+
+
+        tvbuff_t* decrypted_tvb = tvb_new_child_real_data(tvb, decrypted_heap_buffer, dec_len, dec_len);
+        add_new_data_source(pinfo, decrypted_tvb, "Decrypted Data");
+        tvb = decrypted_tvb;
+    }
     switch(conv->response_type) {
         case EResponseType_CompressedIPList:
             return dissect_sbv1_query_response_cmp_list(tvb, pinfo, tree, data);
@@ -207,16 +240,16 @@ int dissect_test(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* 
     tvbuff_t* buff = tvb_get_ptr(tvb, 0, tvb_captured_length(tvb));
 
     sbv1_conv_t* conv = get_sbv1_conversation_data(pinfo);
-    conv->response_type = EResponseType_CompressedIPList;
 
     if(strncmp((const char *)buff, "\\gamename\\", 10) == 0) { //starts with gamenane, therefore it is the validaiton response
         return dissect_sbv1_client_validation(tvb, pinfo, tree, data);
-    } else if(strncmp((const char *)buff, "\\list\\", 10) == 0) {
-        col_set_str(pinfo->cinfo, COL_PROTOCOL, "SBV1 list req");
-
+    } else if(strncmp((const char *)buff, "\\list\\", 6) == 0) {
+        if(strncmp((const char *)buff, "\\list\\cmp", 9) == 0) {
+                conv->response_type = EResponseType_CompressedIPList;
+        }
         conv->client_request_frame = pinfo->num;
     } else { //must be query request
-         if(pinfo->can_desegment && pinfo->srcport == DEFAULT_SBV1_PORT) {
+         if(pinfo->can_desegment) {
              pinfo->desegment_len = DESEGMENT_UNTIL_FIN;
              pinfo->desegment_offset = 0;
              return 0;
@@ -227,14 +260,16 @@ int dissect_test(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* 
     return tvb_captured_length(tvb);
 }
 static guint get_message_len(packet_info* pinfo _U_, tvbuff_t* tvb, int offset, void* data _U_) {
-    int len = tvb_captured_length(tvb) - offset;
+    int len = tvb_reported_length_remaining(tvb, offset);
     tvbuff_t* buff = tvb_get_ptr(tvb, offset, len);
 
-    const char *s = strstr((const char *)buff, "\\final\\");
-
-    if(s != NULL) {
-        int diff = (int) (s - (const char *)buff);
-        return diff + 7;
+    if(((const char *)buff)[0] == '\\') {
+        const char *s = strstr((const char *)buff, "\\final\\");
+        //printf("len is: %d - port: %d\n", len, pinfo->srcport);
+        if(s != NULL) {
+            int diff = (int) (s - (const char *)buff);
+            return diff + 7; /* 7 + \\final\\ */
+        }
     }
 
     return len;

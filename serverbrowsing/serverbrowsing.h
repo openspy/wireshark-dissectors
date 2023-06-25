@@ -9,4 +9,8 @@ void plugin_register_serverbrowsing(void);
 void proto_register_sbv1(void);
 void proto_reg_handoff_sbv1(void);
 
+
+int enctype1_wrapper(unsigned char *key, unsigned char *data, int size);
+int enctype2_wrapper(unsigned char *key, unsigned char *data, int size);
+
 #endif
