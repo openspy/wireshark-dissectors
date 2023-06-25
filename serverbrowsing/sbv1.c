@@ -73,12 +73,13 @@ typedef struct _sbv1_conv_t {
     enum EResponseType response_type;
 
     const char** query_from_game; //pointer to gslist_keys
-    const char** query_for_game; //pointer to gslist_keys
+    //const char** query_for_game; //pointer to gslist_keys
 
     const char *server_challenge;
     const char *client_validation;
     const char *challenge_expected;
 } sbv1_conv_t;
+
 static gint* sbv1_etts[] = {
     &proto_sbv1_ett
 };
@@ -235,7 +236,7 @@ int dissect_sbv1_query_response(tvbuff_t* tvb, packet_info* pinfo, proto_tree* t
 }
 
 
-int dissect_test(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_) {
+int dissect_sbv1_stream(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_) {
 
     tvbuff_t* buff = tvb_get_ptr(tvb, 0, tvb_captured_length(tvb));
 
@@ -245,7 +246,7 @@ int dissect_test(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* 
         return dissect_sbv1_client_validation(tvb, pinfo, tree, data);
     } else if(strncmp((const char *)buff, "\\list\\", 6) == 0) {
         if(strncmp((const char *)buff, "\\list\\cmp", 9) == 0) {
-                conv->response_type = EResponseType_CompressedIPList;
+            conv->response_type = EResponseType_CompressedIPList;
         }
         conv->client_request_frame = pinfo->num;
     } else { //must be query request
@@ -259,13 +260,12 @@ int dissect_test(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* 
     }
     return tvb_captured_length(tvb);
 }
-static guint get_message_len(packet_info* pinfo _U_, tvbuff_t* tvb, int offset, void* data _U_) {
+static guint get_sbv1_message_len(packet_info* pinfo _U_, tvbuff_t* tvb, int offset, void* data _U_) {
     int len = tvb_reported_length_remaining(tvb, offset);
     tvbuff_t* buff = tvb_get_ptr(tvb, offset, len);
 
     if(((const char *)buff)[0] == '\\') {
         const char *s = strstr((const char *)buff, "\\final\\");
-        //printf("len is: %d - port: %d\n", len, pinfo->srcport);
         if(s != NULL) {
             int diff = (int) (s - (const char *)buff);
             return diff + 7; /* 7 + \\final\\ */
@@ -281,7 +281,7 @@ int dissect_sbv1(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* 
     if(conv->server_challenge_frame == 0 || conv->server_challenge_frame == pinfo->num) {
         return dissect_sbv1_server_challenge(tvb, pinfo, tree, data);
     } else {
-        tcp_dissect_pdus(tvb, pinfo, tree, TRUE, 0, get_message_len, dissect_test, data);
+        tcp_dissect_pdus(tvb, pinfo, tree, TRUE, 0, get_sbv1_message_len, dissect_sbv1_stream, data);
     }
 
     return tvb_captured_length(tvb);

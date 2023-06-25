@@ -773,22 +773,6 @@
         return tvb_get_ptr(tvb, offset, fstring_len_size);
     }
 
-    /* This method dissects fully reassembled messages */
-    static int
-        dissect_foo_message(tvbuff_t* tvb, packet_info* pinfo _U_, proto_tree* tree _U_, void* data _U_)
-    {
-        int offset = 0;
-
-        uint32_t message_length = tvb_get_letohil(tvb, 0);
-        proto_tree_add_uint(tree, msglen_field, tvb, offset, 4, message_length); offset += 4;
-
-        dissect_fstring(tvb, pinfo, tree, data, &offset, fstring_field);
-
-        /* TODO: implement your dissecting code */
-        return tvb_captured_length(tvb);
-    }
-
-
     /* determine PDU length of protocol foo */
     static guint
         get_utms_message_len(packet_info* pinfo _U_, tvbuff_t* tvb, int offset, void* data _U_)

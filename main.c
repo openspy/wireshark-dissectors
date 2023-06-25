@@ -32,3 +32,11 @@ const char** gslist_keys_find_by_gamename(const char* name, int len) {
     }
     return NULL;
 }
+
+int add_string_nts_item(tvbuff_t* tvb, proto_tree* tree, int wireshark_field_id, int offset) {
+    int remaining = tvb_captured_length_remaining(tvb, offset);
+    char *string_buffer = (char *)tvb_get_ptr(tvb, offset, remaining);
+    int slen = strlen(string_buffer) + 1;
+    proto_tree_add_item(tree, wireshark_field_id, tvb, offset, slen, ENC_LITTLE_ENDIAN); offset += slen;
+    return slen;
+}
