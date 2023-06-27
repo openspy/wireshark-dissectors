@@ -197,8 +197,13 @@ int dissect_sbv1_query_response_cmp_list(tvbuff_t* tvb, packet_info* pinfo, prot
         if(ip_addr == 0x5c66696e) { // \fin
             break;
         }
-        proto_tree_add_item(tree, sbv1_server_cmp_resp_ip, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN); offset += sizeof(uint32_t);
-        proto_tree_add_item(tree, sbv1_server_cmp_resp_port, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN); offset += sizeof(uint16_t);
+
+        proto_item* ti = proto_tree_add_item(tree, proto_sbv1, tvb, 0, -1, ENC_NA);
+        proto_tree* subtree = proto_item_add_subtree(ti, proto_sbv1_ett);
+        proto_item_set_text(subtree, "Server Item");
+        
+        proto_tree_add_item(subtree, sbv1_server_cmp_resp_ip, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN); offset += sizeof(uint32_t);
+        proto_tree_add_item(subtree, sbv1_server_cmp_resp_port, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN); offset += sizeof(uint16_t);
     }
     return tvb_captured_length(tvb);
 }
@@ -215,10 +220,10 @@ int dissect_sbv1_query_response(tvbuff_t* tvb, packet_info* pinfo, proto_tree* t
         int dec_len;
         switch(conv->enctype) {
             case 1:
-                    dec_len = enctype1_wrapper(conv->query_from_game[2], decrypted_heap_buffer, original_length);
+                dec_len = enctype1_wrapper(conv->query_from_game[2], decrypted_heap_buffer, original_length);
             break;
             case 2:
-                    dec_len = enctype2_wrapper(conv->query_from_game[2], decrypted_heap_buffer, original_length);
+                dec_len = enctype2_wrapper(conv->query_from_game[2], decrypted_heap_buffer, original_length);
             break;
         }
 
@@ -243,7 +248,10 @@ int dissect_sbv1_stream(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_,
     sbv1_conv_t* conv = get_sbv1_conversation_data(pinfo);
 
     if(strncmp((const char *)buff, "\\gamename\\", 10) == 0) { //starts with gamenane, therefore it is the validaiton response
-        return dissect_sbv1_client_validation(tvb, pinfo, tree, data);
+        proto_item* ti = proto_tree_add_item(tree, proto_sbv1, tvb, 0, -1, ENC_NA);
+        proto_tree* subtree = proto_item_add_subtree(ti, proto_sbv1_ett);
+        proto_item_set_text(subtree, "SBV1");
+        return dissect_sbv1_client_validation(tvb, pinfo, subtree, data);
     } else if(strncmp((const char *)buff, "\\list\\", 6) == 0) {
         if(strncmp((const char *)buff, "\\list\\cmp", 9) == 0) {
             conv->response_type = EResponseType_CompressedIPList;
@@ -256,7 +264,12 @@ int dissect_sbv1_stream(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_,
              return 0;
         }
         col_set_str(pinfo->cinfo, COL_PROTOCOL, "SBV1 query resp");
-        return dissect_sbv1_query_response(tvb, pinfo, tree, data);
+
+        proto_item* ti = proto_tree_add_item(tree, proto_sbv1, tvb, 0, -1, ENC_NA);
+        proto_tree* subtree = proto_item_add_subtree(ti, proto_sbv1_ett);
+        proto_item_set_text(subtree, "SBV1");
+        
+        return dissect_sbv1_query_response(tvb, pinfo, subtree, data);
     }
     return tvb_captured_length(tvb);
 }
@@ -279,7 +292,10 @@ int dissect_sbv1(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* 
     sbv1_conv_t* conv = get_sbv1_conversation_data(pinfo);
 
     if(conv->server_challenge_frame == 0 || conv->server_challenge_frame == pinfo->num) {
-        return dissect_sbv1_server_challenge(tvb, pinfo, tree, data);
+        proto_item* ti = proto_tree_add_item(tree, proto_sbv1, tvb, 0, -1, ENC_NA);
+        proto_tree* subtree = proto_item_add_subtree(ti, proto_sbv1_ett);
+        proto_item_set_text(subtree, "SBV2");
+        return dissect_sbv1_server_challenge(tvb, pinfo, subtree, data);
     } else {
         tcp_dissect_pdus(tvb, pinfo, tree, TRUE, 0, get_sbv1_message_len, dissect_sbv1_stream, data);
     }
