@@ -168,7 +168,7 @@ static hf_register_info sbv2_fields_hf[] = {
         NULL, HFILL }
     },
     { &sbv2_listreq_options_push_updates,
-        { "no_server_list", "sbv2.listreq.options.push_updates",
+        { "push_updates", "sbv2.listreq.options.push_updates",
         FT_BOOLEAN, 8,
         NULL, PUSH_UPDATES,
         NULL, HFILL }
