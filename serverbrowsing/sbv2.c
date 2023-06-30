@@ -41,6 +41,7 @@ int sbv2_listresp_num_fields = -1;
 int sbv2_listresp_field_type = -1;
 int sbv2_listresp_field_name = -1;
 int sbv2_listresp_num_popular_values = -1;
+int sbv2_listresp_popular_value = -1;
 
 int sbv2_listresp_server_flags = -1;
 int sbv2_listresp_server_ip = -1;
@@ -238,6 +239,12 @@ static hf_register_info sbv2_fields_hf[] = {
     { &sbv2_listresp_num_popular_values,
         { "num_popular_values", "sbv2.listresp.num_popular_values",
         FT_UINT8, BASE_DEC,
+        NULL, 0x0,
+        NULL, HFILL }
+    },
+    { &sbv2_listresp_popular_value,
+        { "popular_value", "sbv2.listresp.popular_value",
+        FT_STRING, BASE_NONE,
         NULL, 0x0,
         NULL, HFILL }
     },
@@ -617,8 +624,6 @@ static guint
         available -= len + 1;
     }
 
-
-
     if(available < 1) { 
         pinfo->desegment_offset = original_offset;
         pinfo->desegment_len = 1;
@@ -630,7 +635,22 @@ static guint
 
     printf("unique_list_size: %d\n", unique_list_size);
     for(int i=0;i<unique_list_size;i++) {
+            //guint8 key_type = tvb_get_guint8(decrypted_tvb, dec_offset++);
+            //available --;
 
+        int str_remaining = tvb_reported_length_remaining(decrypted_tvb, dec_offset);
+        gint str_len = tvb_strnlen(decrypted_tvb, dec_offset, str_remaining);
+        if(str_len == -1) {
+            pinfo->desegment_offset = original_offset;
+            pinfo->desegment_len = DESEGMENT_ONE_MORE_SEGMENT;
+            tvb_free(decrypted_tvb);
+            return 0;
+        }
+        //guint8 *string = tvb_get_string_enc(pinfo->pool, tvb, dec_offset, str_len, ENC_ASCII);
+        //printf("on string (%d): %s\n", str_len, string);
+
+        dec_offset += str_len + 1;
+        available -= str_len + 1;
     }
 
     //calculate main server list
@@ -752,15 +772,15 @@ int dissect_sbv2_response_list_header(tvbuff_t* tvb, packet_info* pinfo, proto_t
     proto_tree_add_item(tree, sbv2_listresp_public_ip, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN); offset += sizeof(uint32_t);
     proto_tree_add_item(tree, sbv2_listresp_query_port, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN); offset += sizeof(uint16_t);
 
+    guint32 num_keys;
+    proto_tree_add_item_ret_uint(tree, sbv2_listresp_num_fields, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &num_keys); offset += sizeof(uint8_t);
+
     proto_item* ti = proto_tree_add_item(tree, proto_sbv2, tvb, 0, -1, ENC_NA);
     proto_tree* subtree = proto_item_add_subtree(ti, proto_sbv2_ett);
     proto_item_set_text(subtree, "Fields");
 
+
     
-
-    guint32 num_keys;
-    proto_tree_add_item_ret_uint(tree, sbv2_listresp_num_fields, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &num_keys); offset += sizeof(uint8_t);
-
     FieldInfo *fields = (FieldInfo *)wmem_alloc0(pinfo->pool, sizeof(FieldInfo) * num_keys);
 
     for(int i=0;i<num_keys;i++) {
@@ -773,7 +793,22 @@ int dissect_sbv2_response_list_header(tvbuff_t* tvb, packet_info* pinfo, proto_t
         fields[i].field_name = (const char *)string;
         proto_tree_add_item(subtree, sbv2_listresp_field_name, tvb, offset, str_len + 1, ENC_BIG_ENDIAN); offset += str_len + 1;
     }
-    proto_tree_add_item(tree, sbv2_listresp_num_popular_values, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN); offset += sizeof(uint8_t);
+
+    guint32 num_popular_keys;
+    proto_tree_add_item_ret_uint(tree, sbv2_listresp_num_popular_values, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &num_popular_keys); offset += sizeof(uint8_t);
+
+    
+
+    ti = proto_tree_add_item(tree, proto_sbv2, tvb, 0, -1, ENC_NA);
+    subtree = proto_item_add_subtree(ti, proto_sbv2_ett);
+    proto_item_set_text(subtree, "Popular Values");
+
+    for(int i=0;i<num_popular_keys;i++) {
+        int str_remaining = tvb_reported_length_remaining(tvb, offset);
+        gint str_len = tvb_strnlen(tvb, offset, str_remaining);
+
+        proto_tree_add_item(subtree, sbv2_listresp_popular_value, tvb, offset, str_len + 1, ENC_BIG_ENDIAN); offset += str_len + 1;
+    }
 
 
     while(true) {
