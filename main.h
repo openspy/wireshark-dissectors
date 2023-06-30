@@ -19,4 +19,5 @@
 #endif
 
 const char** gslist_keys_find_by_gamename(const char* name, int len);
+void show_dump(int left, unsigned char *data, unsigned int len, FILE *stream);
 #endif //_MAIN_H
