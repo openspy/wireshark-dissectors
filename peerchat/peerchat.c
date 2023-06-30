@@ -100,7 +100,9 @@ int dissect_peerchat_crypt(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _
 
     conv->crypt_frame = pinfo->num;
 
-    tvbuff_t* crypt_bytes = tvb_get_ptr(tvb, offset, tvb_captured_length(tvb));
+    int total_length = tvb_reported_length_remaining(tvb, offset);
+
+    guint8 *crypt_bytes = tvb_get_string_enc(pinfo->pool, tvb, offset, total_length, ENC_ASCII);
 
     const char* last_space = strrchr((const char*)crypt_bytes, ' ');
     if (last_space != NULL) {
@@ -125,7 +127,9 @@ int dissect_peerchat_challenge(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tr
 
     int offset = 0;
 
-    tvbuff_t* crypt_bytes = tvb_get_ptr(tvb, 0, tvb_captured_length(tvb));
+    int str_len = tvb_reported_length_remaining(tvb, offset);
+
+    guint8 *crypt_bytes = tvb_get_string_enc(pinfo->pool, tvb, offset, str_len, ENC_ASCII);
 
     conv->challenge_frame = pinfo->num;
 
@@ -170,7 +174,10 @@ int dissect_peerchat(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, vo
     dissector_handle_t irc_handle = find_dissector("irc");
 
     if (conv->crypt_frame == 0) {
-        tvbuff_t* crypt_bytes = tvb_get_ptr(tvb, 0, 5);
+        int remaining = tvb_reported_length_remaining(tvb, 0);
+        gint str_len = tvb_strnlen(tvb, 0, 5);
+
+        guint8 *crypt_bytes = tvb_get_string_enc(pinfo->pool, tvb, 0, 5, ENC_ASCII);
         if (crypt_bytes != NULL) {
             if (strncmp(crypt_bytes, "CRYPT", 5) == 0) {
                 return dissect_peerchat_crypt(tvb, pinfo, tree, data);
@@ -194,10 +201,7 @@ int dissect_peerchat(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, vo
     
 
     guint16 decrypted_length = tvb_captured_length_remaining(tvb, 0); //no padding in peerchat, its just the packet length
-    const char* original_buffer = (const char*)tvb_get_ptr(tvb, 0, decrypted_length);
-
-    guchar* decrypted_heap_buffer = (guchar*)wmem_alloc(pinfo->pool, decrypted_length);
-    memcpy(decrypted_heap_buffer, original_buffer, decrypted_length);
+    guchar* decrypted_heap_buffer = (guchar*)tvb_memdup(pinfo->pool, tvb, 0, decrypted_length);
 
     gs_peerchat_ctx crypto_state;
     memcpy(&crypto_state, &pdu_state->state, sizeof(pdu_state->state));

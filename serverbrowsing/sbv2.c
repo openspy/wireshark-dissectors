@@ -462,7 +462,7 @@ int dissect_sbv2_list_request(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tre
     offset += add_string_nts_item(tvb, tree, sbv2_listreq_for_gamename, offset);
     
     int from_len = add_string_nts_item(tvb, tree, sbv2_listreq_from_gamename, offset);
-    char *from_gamename = (char *)tvb_get_ptr(tvb, offset, from_len);
+    char *from_gamename = (char *)tvb_get_string_enc(pinfo->pool, tvb, offset, from_len, ENC_ASCII);
     if(conv->query_from_game == NULL) {
         conv->query_from_game = gslist_keys_find_by_gamename(from_gamename, from_len);
     }
