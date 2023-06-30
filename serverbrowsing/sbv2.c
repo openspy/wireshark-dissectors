@@ -23,6 +23,13 @@ int sbv2_listreq_options = -1;
 int sbv2_listreq_source_ip = -1;
 int sbv2_listreq_max_results = -1;
 
+int sbv2_listreq_options_send_fields_for_all = -1;
+int sbv2_listreq_options_no_server_list = -1;
+int sbv2_listreq_options_push_updates = -1;
+int sbv2_listreq_options_send_groups = -1;
+int sbv2_listreq_options_no_list_cache = -1;
+int sbv2_listreq_options_limit_result_count = -1;
+
 int sbv2_crypt_header_len = -1;
 int sbv2_crypt_header_random_data = -1;
 int sbv2_crypt_header_keylen = -1;
@@ -31,10 +38,13 @@ int sbv2_crypt_header_key_data = -1;
 int sbv2_listresp_public_ip = -1;
 int sbv2_listresp_query_port = -1;
 int sbv2_listresp_num_fields = -1;
+int sbv2_listresp_field_type = -1;
+int sbv2_listresp_field_name = -1;
 int sbv2_listresp_num_popular_values = -1;
 
 int sbv2_listresp_server_flags = -1;
 int sbv2_listresp_server_ip = -1;
+int sbv2_listresp_server_group_number = -1;
 int sbv2_listresp_server_port = -1;
 int sbv2_listresp_server_private_ip = -1;
 int sbv2_listresp_server_private_port = -1;
@@ -46,7 +56,8 @@ int sbv2_listresp_server_updateflags_icmp_ip_flag = -1;
 int sbv2_listresp_server_updateflags_nonstandard_port_flag = -1;
 int sbv2_listresp_server_updateflags_nonstandard_private_port_flag = -1;
 int sbv2_listresp_server_updateflags_has_keys_flag = -1;
-int sbv2_listresp_server_updateflags_has_rules_flag = -1;
+int sbv2_listresp_server_updateflags_has_fullkeys_flag = -1;
+int sbv2_listresp_server_field_strindex = -1;
 int sbv2_listresp_server_field_keytype = -1;
 int sbv2_listresp_server_field_keyname = -1;
 int sbv2_listresp_server_field_keyvalue = -1;
@@ -59,7 +70,17 @@ static int* const server_updateflags_bits[] = {
 	&sbv2_listresp_server_updateflags_nonstandard_port_flag,
 	&sbv2_listresp_server_updateflags_nonstandard_private_port_flag,
 	&sbv2_listresp_server_updateflags_has_keys_flag,
-	&sbv2_listresp_server_updateflags_has_rules_flag,
+	&sbv2_listresp_server_updateflags_has_fullkeys_flag,
+	NULL
+};
+
+static int* const listreq_options_bits[] = {
+	&sbv2_listreq_options_send_fields_for_all,
+	&sbv2_listreq_options_no_server_list,
+	&sbv2_listreq_options_push_updates,
+	&sbv2_listreq_options_send_groups,
+	&sbv2_listreq_options_no_list_cache,
+	&sbv2_listreq_options_limit_result_count,
 	NULL
 };
 
@@ -134,6 +155,42 @@ static hf_register_info sbv2_fields_hf[] = {
         NULL, 0x0,
         NULL, HFILL }
     },
+    { &sbv2_listreq_options_send_fields_for_all,
+        { "send_fields_for_all", "sbv2.listreq.options.send_fields_for_all",
+        FT_BOOLEAN, 8,
+        NULL, SEND_FIELDS_FOR_ALL,
+        NULL, HFILL }
+    },
+    { &sbv2_listreq_options_no_server_list,
+        { "no_server_list", "sbv2.listreq.options.no_server_list",
+        FT_BOOLEAN, 8,
+        NULL, NO_SERVER_LIST,
+        NULL, HFILL }
+    },
+    { &sbv2_listreq_options_push_updates,
+        { "no_server_list", "sbv2.listreq.options.push_updates",
+        FT_BOOLEAN, 8,
+        NULL, PUSH_UPDATES,
+        NULL, HFILL }
+    },
+    { &sbv2_listreq_options_send_groups,
+        { "send_groups", "sbv2.listreq.options.send_groups",
+        FT_BOOLEAN, 8,
+        NULL, SEND_GROUPS,
+        NULL, HFILL }
+    },
+    { &sbv2_listreq_options_no_list_cache,
+        { "no_list_cache", "sbv2.listreq.options.no_list_cache",
+        FT_BOOLEAN, 8,
+        NULL, NO_LIST_CACHE,
+        NULL, HFILL }
+    },
+    { &sbv2_listreq_options_limit_result_count,
+        { "limit_result_count", "sbv2.listreq.options.limit_result_count",
+        FT_BOOLEAN, 8,
+        NULL, LIMIT_RESULT_COUNT,
+        NULL, HFILL }
+    },
     { &sbv2_listreq_source_ip,
         { "alternate_source_ip", "sbv2.listreq.alternate_source_ip",
         FT_IPv4, BASE_NONE,
@@ -166,6 +223,18 @@ static hf_register_info sbv2_fields_hf[] = {
         NULL, 0x0,
         NULL, HFILL }
     },
+    { &sbv2_listresp_field_type,
+        { "field_type", "sbv2.listresp.field_type",
+        FT_UINT8, BASE_DEC,
+        NULL, 0x0,
+        NULL, HFILL }
+    },
+    { &sbv2_listresp_field_name,
+        { "field_name", "sbv2.listresp.field_name",
+        FT_STRING, BASE_NONE,
+        NULL, 0x0,
+        NULL, HFILL }
+    },
     { &sbv2_listresp_num_popular_values,
         { "num_popular_values", "sbv2.listresp.num_popular_values",
         FT_UINT8, BASE_DEC,
@@ -182,6 +251,12 @@ static hf_register_info sbv2_fields_hf[] = {
     { &sbv2_listresp_server_ip,
         { "server_ip", "sbv2.listresp.server_ip",
         FT_IPv4, BASE_NONE,
+        NULL, 0x0,
+        NULL, HFILL }
+    },
+    { &sbv2_listresp_server_group_number,
+        { "group_number", "sbv2.listresp.group_number",
+        FT_UINT32, BASE_DEC,
         NULL, 0x0,
         NULL, HFILL }
     },
@@ -209,6 +284,12 @@ static hf_register_info sbv2_fields_hf[] = {
         NULL, 0x0,
         NULL, HFILL }
     },
+    { &sbv2_listresp_server_field_strindex,
+        { "field.strindex", "sbv2.listresp.field.strindex",
+        FT_UINT8, BASE_DEC,
+        NULL, 0x0,
+        NULL, HFILL }
+    },
     { &sbv2_listresp_server_field_keytype,
         { "field.keytype", "sbv2.listresp.field.keytype",
         FT_UINT8, BASE_DEC,
@@ -228,7 +309,6 @@ static hf_register_info sbv2_fields_hf[] = {
         NULL, HFILL }
     },
 
-    //sbv2_listresp_server_field_keyname
     // server list item flags
     { &sbv2_listresp_server_updateflags_unsolicited_udp_flag,
         { "unsolicited_udp_flag", "sbv2.listresp.server_flags.unsolicited_udp_flag",
@@ -272,8 +352,8 @@ static hf_register_info sbv2_fields_hf[] = {
         NULL, HAS_KEYS_FLAG,
         NULL, HFILL }
     },
-    { &sbv2_listresp_server_updateflags_has_rules_flag,
-        { "has_rules_flag", "sbv2.listresp.server_flags.has_rules_flag",
+    { &sbv2_listresp_server_updateflags_has_fullkeys_flag,
+        { "has_fullkeys_flag", "sbv2.listresp.server_flags.has_fullkeys_flag",
         FT_BOOLEAN, 9,
         NULL, HAS_FULL_RULES_FLAG,
         NULL, HFILL }
@@ -308,7 +388,7 @@ static hf_register_info sbv2_fields_hf[] = {
 typedef struct _sbv2_conv_t {
     enctypex_data_t enctypex_data;
     char challenge[LIST_CHALLENGE_LEN];
-    int last_server_pdu;
+    int list_req_options;
     int response_crypt_header_pdu;
     const char** query_from_game; //pointer to gslist_keys
 } sbv2_conv_t;
@@ -316,6 +396,11 @@ typedef struct _sbv2_conv_t {
 typedef struct _sbv2_pdu_crypto_state {
 	enctypex_data_t state;
 } sbv2_pdu_crypto_state;
+
+typedef struct {
+    uint8_t field_type;
+    const char *field_name;
+} FieldInfo;
 
 static sbv2_conv_t* get_sbv2_conversation_data(packet_info* pinfo)
 {
@@ -391,8 +476,11 @@ int dissect_sbv2_list_request(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tre
     offset += add_string_nts_item(tvb, tree, sbv2_listreq_filter, offset);
     offset += add_string_nts_item(tvb, tree, sbv2_listreq_key_list, offset);
 
-    guint32 options = 0;
-    proto_tree_add_item_ret_uint(tree, sbv2_listreq_options, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN, &options); offset += sizeof(uint32_t);
+    guint32 options = tvb_get_ntohl(tvb, offset);
+    conv->list_req_options = options;
+    proto_tree_add_bitmask_value(tree, tvb, offset, sbv2_listreq_options, proto_sbv2_ett, listreq_options_bits, options); offset += sizeof(uint32_t);
+    //proto_tree_add_item_ret_uint(tree, sbv2_listreq_options, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN, &options); offset += sizeof(uint32_t);
+    //
 
     if(options & ALTERNATE_SOURCE_IP) {
         proto_tree_add_item(tree, sbv2_listreq_source_ip, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN); offset += sizeof(uint32_t);
@@ -438,8 +526,6 @@ static int ServerSizeForFlags(int flags)
 static guint
     get_sbv2_response_crypt_random_len(packet_info* pinfo _U_, tvbuff_t* tvb, int original_offset, void* data _U_)
 {
-    printf("get_sbv2_response_crypt_random_len - %d - %d\n", pinfo->num, pinfo->fd->num);
-    
     int offset = original_offset;
     gint available = tvb_reported_length_remaining(tvb, offset);
 
@@ -474,6 +560,9 @@ static guint
     memset(&ctx, 0, sizeof(ctx));
 
     sbv2_conv_t *conv = get_sbv2_conversation_data(pinfo);
+    if(conv->query_from_game == NULL) { //XXX:: handle this better?
+        return 0;
+    }
 
 
     int enctypex_data_len = offset - original_offset;
@@ -485,7 +574,6 @@ static guint
 
     guchar* decrypted_buffer = (guchar*)tvb_memdup(wmem_packet_scope(), tvb, offset, available);
     enctypex_func6(&ctx.encxkey, decrypted_buffer, available);
-    show_dump(0, decrypted_buffer, available, stdout);
     
     tvbuff_t* decrypted_tvb = tvb_new_real_data(decrypted_buffer, available, available);
     int dec_offset = 0;
@@ -513,8 +601,7 @@ static guint
 
     //calculate key list
     guint8 key_list_size = tvb_get_guint8(decrypted_tvb, dec_offset++);
-        available--;
-    printf("key_list_size: %d\n", key_list_size);
+    available--;
     for(int i=0;i<key_list_size;i++) {
         
         guint8 key_type = tvb_get_guint8(decrypted_tvb, dec_offset++); available--;
@@ -558,10 +645,8 @@ static guint
         }
         
         guint8 flags = tvb_get_guint8(decrypted_tvb, dec_offset++);
-        printf("on flags: %d\n", flags);
         available--;
         int expected_size = ServerSizeForFlags(flags) - 1;
-        printf("expected size: %d\n", expected_size);
         if(available < expected_size) { 
             pinfo->desegment_offset = original_offset;
             pinfo->desegment_len = expected_size;
@@ -573,14 +658,12 @@ static guint
         dec_offset += expected_size;
         available -= expected_size;
         if(ip == 0xFFFFFFFF) {
-            printf("GOT END\n");
             break;            
         }
 
         if(flags & HAS_KEYS_FLAG) {
             for(int i=0;i<key_list_size;i++) {
                 guint8 string_index = tvb_get_guint8(decrypted_tvb, dec_offset++); available--;
-                printf("str index: %d\n", string_index);
                 int str_remaining = tvb_reported_length_remaining(decrypted_tvb, dec_offset);
                 gint len = tvb_strnlen(decrypted_tvb, dec_offset, str_remaining);
                 if(len == -1) {
@@ -589,7 +672,6 @@ static guint
                     tvb_free(decrypted_tvb);
                     return 0;
                 }
-                printf("strlen: %d\n", len);
                 dec_offset += len + 1;
                 available -= len+ 1;
             }
@@ -597,14 +679,14 @@ static guint
 
     }
 
-    printf("size is: %d + %d = %d\n", offset, dec_offset, offset + dec_offset);
-
     //after here is only adhoc messages!
     tvb_free(decrypted_tvb);
     return (guint)offset + dec_offset;
 }
 
-int dissect_sbv2_response_list_item(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int offset) {
+int dissect_sbv2_response_list_item(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int offset, guint32 num_keys, FieldInfo *fields) {
+    sbv2_conv_t *conv = get_sbv2_conversation_data(pinfo);
+
     proto_item* ti = proto_tree_add_item(tree, proto_sbv2, tvb, 0, -1, ENC_NA);
     proto_tree* subtree = proto_item_add_subtree(ti, proto_sbv2_ett);
     proto_item_set_text(subtree, "Server Item");
@@ -617,7 +699,13 @@ int dissect_sbv2_response_list_item(tvbuff_t* tvb, packet_info* pinfo, proto_tre
 
 
     ip = tvb_get_ntohl(tvb, offset + len);
-    proto_tree_add_item(tree, sbv2_listresp_server_ip, tvb, len + offset, sizeof(uint32_t), ENC_BIG_ENDIAN); len += sizeof(uint32_t);
+
+    if(conv->list_req_options & SEND_GROUPS) {
+        proto_tree_add_item(tree, sbv2_listresp_server_group_number, tvb, len + offset, sizeof(uint32_t), ENC_BIG_ENDIAN); len += sizeof(uint32_t);
+    } else {
+        proto_tree_add_item(tree, sbv2_listresp_server_ip, tvb, len + offset, sizeof(uint32_t), ENC_BIG_ENDIAN); len += sizeof(uint32_t);
+    }
+    
 
     if(ip == -1) {
         return -len;
@@ -642,36 +730,54 @@ int dissect_sbv2_response_list_item(tvbuff_t* tvb, packet_info* pinfo, proto_tre
         proto_tree* subtree = proto_item_add_subtree(ti, proto_sbv2_ett);
         proto_item_set_text(subtree, "Keys");
     
-        int num_keys = 1; //XXX: TRACK THESE!
         for(int i=0;i<num_keys;i++) {
-            proto_tree_add_item(subtree, sbv2_listresp_server_field_keytype, tvb, len + offset, sizeof(uint8_t), ENC_BIG_ENDIAN); len += sizeof(uint8_t);
+            proto_item* key_ti = proto_tree_add_item(subtree, proto_sbv2, tvb, 0, -1, ENC_NA);
+            proto_tree* key_subtree = proto_item_add_subtree(key_ti, proto_sbv2_ett);
+            proto_item_set_text(key_subtree, fields[i].field_name);
+            proto_tree_add_item(key_subtree, sbv2_listresp_server_field_strindex, tvb, len + offset, sizeof(uint8_t), ENC_BIG_ENDIAN); len += sizeof(uint8_t);
             int str_remaining = tvb_reported_length_remaining(tvb, len + offset);
             gint str_len = tvb_strnlen(tvb, len + offset, str_remaining);
-            proto_tree_add_item(subtree, sbv2_listresp_server_field_keyvalue, tvb, len + offset, str_len + 1, ENC_BIG_ENDIAN); len += str_len + 1;
+            //sbv2_listresp_server_field_keyname
+            proto_tree_add_uint(key_subtree, sbv2_listresp_server_field_keytype, tvb, len + offset, str_len + 1, fields[i].field_type);
+            proto_tree_add_string(key_subtree, sbv2_listresp_server_field_keyname, tvb, len + offset, str_len + 1, fields[i].field_name);
+            proto_tree_add_item(key_subtree, sbv2_listresp_server_field_keyvalue, tvb, len + offset, str_len + 1, ENC_BIG_ENDIAN); len += str_len + 1;
         }
     }
     return len;
 }
+
 int dissect_sbv2_response_list_header(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int offset) {
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "SBV2 list response");
 
     proto_tree_add_item(tree, sbv2_listresp_public_ip, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN); offset += sizeof(uint32_t);
     proto_tree_add_item(tree, sbv2_listresp_query_port, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN); offset += sizeof(uint16_t);
 
-    int num_keys;
+    proto_item* ti = proto_tree_add_item(tree, proto_sbv2, tvb, 0, -1, ENC_NA);
+    proto_tree* subtree = proto_item_add_subtree(ti, proto_sbv2_ett);
+    proto_item_set_text(subtree, "Fields");
+
+    
+
+    guint32 num_keys;
     proto_tree_add_item_ret_uint(tree, sbv2_listresp_num_fields, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &num_keys); offset += sizeof(uint8_t);
-    printf("NUM KEYS: %d\n", num_keys);
+
+    FieldInfo *fields = (FieldInfo *)wmem_alloc0(pinfo->pool, sizeof(FieldInfo) * num_keys);
+
     for(int i=0;i<num_keys;i++) {
-        offset++; //skip type
+        guint32 field_type;
+        proto_tree_add_item_ret_uint(subtree, sbv2_listresp_field_type, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &field_type); offset += sizeof(uint8_t);
         int str_remaining = tvb_reported_length_remaining(tvb, offset);
         gint str_len = tvb_strnlen(tvb, offset, str_remaining);
-        offset += str_len + 1;
+        guint8 *string = tvb_get_string_enc(pinfo->pool, tvb, offset, str_len, ENC_ASCII);
+        fields[i].field_type = field_type;
+        fields[i].field_name = (const char *)string;
+        proto_tree_add_item(subtree, sbv2_listresp_field_name, tvb, offset, str_len + 1, ENC_BIG_ENDIAN); offset += str_len + 1;
     }
     proto_tree_add_item(tree, sbv2_listresp_num_popular_values, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN); offset += sizeof(uint8_t);
 
 
     while(true) {
-        int len = dissect_sbv2_response_list_item(tvb, pinfo, tree, data, offset);
+        int len = dissect_sbv2_response_list_item(tvb, pinfo, tree, data, offset, num_keys, fields);
         if(len < 0) {
             offset += -len;
             break;
@@ -687,6 +793,9 @@ int dissect_sbv2_response_crypt_header(tvbuff_t* tvb, packet_info* pinfo, proto_
     int offset = 0;
 
     sbv2_conv_t *conv = get_sbv2_conversation_data(pinfo);
+    if(conv->query_from_game == NULL) {
+        return 0;
+    }
 
     guint8 len = tvb_get_guint8(tvb, offset);
     len ^= 0xEC;
