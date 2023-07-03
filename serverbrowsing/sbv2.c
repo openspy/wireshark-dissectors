@@ -11,6 +11,7 @@ static gint* sbv2_etts[] = {
 
 int sbv2_incoming_length = -1;
 int sbv2_request_type = -1;
+int sbv2_request_name = -1;
 int sbv2_listreq_protocol_version = -1;
 int sbv2_listreq_encoding_version = -1;
 int sbv2_listreq_game_version = -1;
@@ -99,6 +100,12 @@ static hf_register_info sbv2_fields_hf[] = {
     { &sbv2_request_type,
         { "request_type", "sbv2.request_type",
         FT_UINT8, BASE_DEC,
+        NULL, 0x0,
+        NULL, HFILL }
+    },
+    { &sbv2_request_name,
+        { "request_name", "sbv2.request_name",
+        FT_STRING, BASE_NONE,
         NULL, 0x0,
         NULL, HFILL }
     },
@@ -396,8 +403,11 @@ typedef struct _sbv2_conv_t {
     enctypex_data_t enctypex_data;
     char challenge[LIST_CHALLENGE_LEN];
     int list_req_options;
-    int response_crypt_header_pdu;
+    int response_server_list_end_pdu;
     const char** query_from_game; //pointer to gslist_keys
+
+    enctypex_data_t pdu_enctypx_last_data;
+    int last_enctypex_pdu;
 } sbv2_conv_t;
 
 typedef struct _sbv2_pdu_crypto_state {
@@ -486,8 +496,6 @@ int dissect_sbv2_list_request(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tre
     guint32 options = tvb_get_ntohl(tvb, offset);
     conv->list_req_options = options;
     proto_tree_add_bitmask_value(tree, tvb, offset, sbv2_listreq_options, proto_sbv2_ett, listreq_options_bits, options); offset += sizeof(uint32_t);
-    //proto_tree_add_item_ret_uint(tree, sbv2_listreq_options, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN, &options); offset += sizeof(uint32_t);
-    //
 
     if(options & ALTERNATE_SOURCE_IP) {
         proto_tree_add_item(tree, sbv2_listreq_source_ip, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN); offset += sizeof(uint32_t);
@@ -503,9 +511,31 @@ int dissect_sbv2_client_stream(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tr
     
     int offset = 0;
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "SBV2");
+    guint32 request_type = 0;
     proto_tree_add_item(tree, sbv2_incoming_length, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN); offset += sizeof(uint16_t);
-    proto_tree_add_item(tree, sbv2_request_type, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN); offset += sizeof(uint8_t);
-    return dissect_sbv2_list_request(tvb, pinfo, tree, data, offset);
+    proto_tree_add_item_ret_uint(tree, sbv2_request_type, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &request_type); offset += sizeof(uint8_t);
+    switch(request_type) {
+        case SERVER_LIST_REQUEST:
+            proto_tree_add_string(tree, sbv2_request_name, tvb, offset - 1, sizeof(uint8_t), "SERVER_LIST_REQUEST");
+            return dissect_sbv2_list_request(tvb, pinfo, tree, data, offset);
+        case SERVER_INFO_REQUEST:
+            proto_tree_add_string(tree, sbv2_request_name, tvb, offset - 1, sizeof(uint8_t), "SERVER_INFO_REQUEST");
+        break;
+        case SEND_MESSAGE_REQUEST:
+            proto_tree_add_string(tree, sbv2_request_name, tvb, offset - 1, sizeof(uint8_t), "SEND_MESSAGE_REQUEST");
+        break;
+        case KEEPALIVE_REPLY:
+            proto_tree_add_string(tree, sbv2_request_name, tvb, offset - 1, sizeof(uint8_t), "KEEPALIVE_REPLY");
+        break;
+        case MAPLOOP_REQUEST:
+            proto_tree_add_string(tree, sbv2_request_name, tvb, offset - 1, sizeof(uint8_t), "MAPLOOP_REQUEST");
+        break;
+        case PLAYERSEARCH_REQUEST:
+            proto_tree_add_string(tree, sbv2_request_name, tvb, offset - 1, sizeof(uint8_t), "PLAYERSEARCH_REQUEST");
+        break;
+
+    }
+    return tvb_captured_length(tvb);
 }
 
 static guint
@@ -576,7 +606,6 @@ static guint
     void *key_data = tvb_memdup(wmem_packet_scope(), tvb, original_offset, enctypex_data_len);
     
     enctypex_init(&ctx.encxkey, conv->query_from_game[2], conv->challenge, key_data, &enctypex_data_len, &ctx);
-    //wmem_free(NULL, key_data);
 
 
     guchar* decrypted_buffer = (guchar*)tvb_memdup(wmem_packet_scope(), tvb, offset, available);
@@ -633,11 +662,7 @@ static guint
     guint8 unique_list_size = tvb_get_guint8(decrypted_tvb, dec_offset++);
     available --;
 
-    printf("unique_list_size: %d\n", unique_list_size);
     for(int i=0;i<unique_list_size;i++) {
-            //guint8 key_type = tvb_get_guint8(decrypted_tvb, dec_offset++);
-            //available --;
-
         int str_remaining = tvb_reported_length_remaining(decrypted_tvb, dec_offset);
         gint str_len = tvb_strnlen(decrypted_tvb, dec_offset, str_remaining);
         if(str_len == -1) {
@@ -646,9 +671,6 @@ static guint
             tvb_free(decrypted_tvb);
             return 0;
         }
-        //guint8 *string = tvb_get_string_enc(pinfo->pool, tvb, dec_offset, str_len, ENC_ASCII);
-        //printf("on string (%d): %s\n", str_len, string);
-
         dec_offset += str_len + 1;
         available -= str_len + 1;
     }
@@ -767,6 +789,8 @@ int dissect_sbv2_response_list_item(tvbuff_t* tvb, packet_info* pinfo, proto_tre
 }
 
 int dissect_sbv2_response_list_header(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int offset) {
+    sbv2_conv_t *conv = get_sbv2_conversation_data(pinfo);
+
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "SBV2 list response");
 
     proto_tree_add_item(tree, sbv2_listresp_public_ip, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN); offset += sizeof(uint32_t);
@@ -815,6 +839,7 @@ int dissect_sbv2_response_list_header(tvbuff_t* tvb, packet_info* pinfo, proto_t
         int len = dissect_sbv2_response_list_item(tvb, pinfo, tree, data, offset, num_keys, fields);
         if(len < 0) {
             offset += -len;
+            conv->response_server_list_end_pdu = pinfo->num;
             break;
         }
         offset += len;
@@ -849,15 +874,16 @@ int dissect_sbv2_response_crypt_header(tvbuff_t* tvb, packet_info* pinfo, proto_
     int enctypex_data_len = offset;
 
     void *key_data = tvb_memdup(wmem_packet_scope(), tvb, 0, enctypex_data_len);
-    enctypex_data_t ctx;
-    memset(&ctx, 0, sizeof(ctx));
-    enctypex_init(&ctx.encxkey, conv->query_from_game[2], conv->challenge, key_data, &enctypex_data_len, &ctx);
+    memset(&conv->enctypex_data, 0, sizeof(conv->enctypex_data));
+    enctypex_init(&conv->enctypex_data.encxkey, conv->query_from_game[2], conv->challenge, key_data, &enctypex_data_len, &conv->enctypex_data);
 
     gint available = tvb_reported_length_remaining(tvb, offset);
 
     guchar* decrypted_buffer = (guchar*)tvb_memdup(wmem_packet_scope(), tvb, offset, available);
-    enctypex_func6(&ctx.encxkey, decrypted_buffer, available);
-    //show_dump(0, decrypted_buffer, available, stdout);
+    enctypex_func6(&conv->enctypex_data.encxkey, decrypted_buffer, available);
+
+    memcpy(&conv->pdu_enctypx_last_data, &conv->enctypex_data, sizeof(enctypex_data_t));
+    conv->last_enctypex_pdu = pinfo->num;
     
     tvbuff_t* decrypted_tvb = tvb_new_real_data(decrypted_buffer, available, available);
     int dec_offset = 0;
@@ -871,12 +897,28 @@ int dissect_sbv2_response_crypt_header(tvbuff_t* tvb, packet_info* pinfo, proto_
     return dissect_sbv2_response_list_header(decrypted_tvb, pinfo, subtree, data, dec_offset);
 }
 
+int dissect_sbv2_response_adhoc(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_) {
+    return tvb_captured_length(tvb);
+}
+
+static guint
+    get_sbv2_response_adhoc_len(packet_info* pinfo _U_, tvbuff_t* tvb, int original_offset, void* data _U_)
+{
+    return 1;
+}
+
 int dissect_sbv2(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_) { 
 
     if(pinfo->srcport != DEFAULT_SBV2_PORT) {
         tcp_dissect_pdus(tvb, pinfo, tree, TRUE, 2, get_sbv2_incoming_message_len, dissect_sbv2_client_stream, data);
     } else {
-        tcp_dissect_pdus(tvb, pinfo, tree, TRUE, 1, get_sbv2_response_crypt_random_len, dissect_sbv2_response_crypt_header, data);
+        sbv2_conv_t *conv = get_sbv2_conversation_data(pinfo);
+        if(pinfo->num <= conv->response_server_list_end_pdu || conv->response_server_list_end_pdu == 0) {
+            tcp_dissect_pdus(tvb, pinfo, tree, TRUE, 1, get_sbv2_response_crypt_random_len, dissect_sbv2_response_crypt_header, data);
+        } else {
+            col_set_str(pinfo->cinfo, COL_PROTOCOL, "SBV2 Adhoc");
+            tcp_dissect_pdus(tvb, pinfo, tree, TRUE, 1, get_sbv2_response_adhoc_len, dissect_sbv2_response_adhoc, data);
+        }        
     }
    
     return tvb_captured_length(tvb);

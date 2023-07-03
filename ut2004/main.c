@@ -684,7 +684,7 @@
         conv_data = (utms_conv_t*)conversation_get_proto_data(conversation, proto_utms);
         if (!conv_data) {
             /* Setup the conversation structure itself */
-            conv_data = (utms_conv_t*)wmem_alloc(wmem_file_scope(), sizeof(utms_conv_t));
+            conv_data = (utms_conv_t*)wmem_alloc0(wmem_file_scope(), sizeof(utms_conv_t));
 
             conversation_add_proto_data(conversation, proto_utms,
                 conv_data);
