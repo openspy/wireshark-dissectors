@@ -405,9 +405,6 @@ typedef struct _sbv2_conv_t {
     int list_req_options;
     int response_server_list_end_pdu;
     const char** query_from_game; //pointer to gslist_keys
-
-    enctypex_data_t pdu_enctypx_last_data;
-    int last_enctypex_pdu;
 } sbv2_conv_t;
 
 typedef struct _sbv2_pdu_crypto_state {
@@ -602,6 +599,7 @@ static guint
     if(conv->query_from_game == NULL) { //XXX:: handle this better?
         return 0;
     }
+    
 
 
     int enctypex_data_len = offset - original_offset;
@@ -723,8 +721,11 @@ static guint
 
     }
 
+    sbv2_pdu_crypto_state *pdu_state = get_sbv2_pdu_crypto_state(pinfo);
+    pdu_state->decrypted_tvb = decrypted_tvb;
+    pdu_state->len = dec_offset;
+
     //after here is only adhoc messages!
-    tvb_free(decrypted_tvb);
     return (guint)offset + dec_offset;
 }
 
@@ -854,10 +855,9 @@ int dissect_sbv2_response_list_header(tvbuff_t* tvb, packet_info* pinfo, proto_t
 int dissect_sbv2_response_crypt_header(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_) {
     int offset = 0;
 
-    sbv2_conv_t *conv = get_sbv2_conversation_data(pinfo);
-    if(conv->query_from_game == NULL) {
-        return 0;
-    }
+    sbv2_pdu_crypto_state *pdu_state = get_sbv2_pdu_crypto_state(pinfo);
+
+
 
     guint8 len = tvb_get_guint8(tvb, offset);
     len ^= 0xEC;
@@ -868,47 +868,19 @@ int dissect_sbv2_response_crypt_header(tvbuff_t* tvb, packet_info* pinfo, proto_
     len = tvb_get_guint8(tvb, offset);
     len ^= 0xEA;
 
-
     proto_tree_add_uint(tree, sbv2_crypt_header_keylen, tvb, offset, sizeof(uint8_t), len); offset++;
     proto_tree_add_item(tree, sbv2_crypt_header_key_data, tvb, offset, len, ENC_BIG_ENDIAN); offset += len;
 
+    tvb = pdu_state->decrypted_tvb;
+    offset = 0;
 
-    int enctypex_data_len = offset;
-
-    void *key_data = tvb_memdup(wmem_packet_scope(), tvb, 0, enctypex_data_len);
-    memset(&conv->enctypex_data, 0, sizeof(conv->enctypex_data));
-    enctypex_init(&conv->enctypex_data.encxkey, conv->query_from_game[2], conv->challenge, key_data, &enctypex_data_len, &conv->enctypex_data);
-
-    gint available = tvb_reported_length_remaining(tvb, offset);
-
-    guchar* decrypted_buffer = (guchar*)tvb_memdup(wmem_packet_scope(), tvb, offset, available);
-    enctypex_func6(&conv->enctypex_data.encxkey, decrypted_buffer, available);
-
-    //printf("list header\n");
-    //show_dump(0, (unsigned char *)&conv->enctypex_data.encxkey, sizeof(conv->enctypex_data.encxkey), stdout);
-
-    memcpy(&conv->pdu_enctypx_last_data, &conv->enctypex_data, sizeof(enctypex_data_t));
-    conv->last_enctypex_pdu = pinfo->num;
-    
-    tvbuff_t* decrypted_tvb = tvb_new_real_data(decrypted_buffer, available, available);
-    int dec_offset = 0;
-
-    add_new_data_source(pinfo, decrypted_tvb, "Decrypted Data");
+    add_new_data_source(pinfo, tvb, "Decrypted Data");
 
     proto_item* ti = proto_tree_add_item(tree, proto_sbv2, tvb, 0, -1, ENC_NA);
     proto_tree* subtree = proto_item_add_subtree(ti, proto_sbv2_ett);
     proto_item_set_text(subtree, "List Response");
 
-    return dissect_sbv2_response_list_header(decrypted_tvb, pinfo, subtree, data, dec_offset);
-}
-
-void pdu_crypto_state_update_global(packet_info *pinfo, enctypex_data_t *data) {
-    sbv2_conv_t *conv = get_sbv2_conversation_data(pinfo); 
-
-   if(pinfo->num > conv->last_enctypex_pdu) {
-        conv->last_enctypex_pdu = pinfo->num;
-        memcpy((char *)&conv->enctypex_data, data, sizeof(enctypex_data_t));
-   }
+    return dissect_sbv2_response_list_header(tvb, pinfo, subtree, data, offset);
 }
 
 int dissect_sbv2_response_adhoc(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_) {
