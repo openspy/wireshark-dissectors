@@ -1407,7 +1407,7 @@
 
 
 
-    void plugin_register_ut2004(void)
+    void plugin_register_utmaster(void)
     {
         static proto_plugin plug;
 
