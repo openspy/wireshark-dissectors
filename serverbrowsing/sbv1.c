@@ -294,7 +294,7 @@ int dissect_sbv1(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* 
     if(conv->server_challenge_frame == 0 || conv->server_challenge_frame == pinfo->num) {
         proto_item* ti = proto_tree_add_item(tree, proto_sbv1, tvb, 0, -1, ENC_NA);
         proto_tree* subtree = proto_item_add_subtree(ti, proto_sbv1_ett);
-        proto_item_set_text(subtree, "SBV2");
+        proto_item_set_text(subtree, "SBv1");
         return dissect_sbv1_server_challenge(tvb, pinfo, subtree, data);
     } else {
         tcp_dissect_pdus(tvb, pinfo, tree, TRUE, 0, get_sbv1_message_len, dissect_sbv1_stream, data);
