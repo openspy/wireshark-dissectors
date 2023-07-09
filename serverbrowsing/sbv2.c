@@ -892,13 +892,24 @@ int dissect_sbv2_response_crypt_header(tvbuff_t* tvb, packet_info* pinfo, proto_
 int dissect_sbv2_response_adhoc(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_) {
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "SBV2 Adhoc");
 
+    proto_item* ti = proto_tree_add_item(tree, proto_sbv2, tvb, 0, -1, ENC_NA);
+    proto_tree* subtree = proto_item_add_subtree(ti, proto_sbv2_ett);
+    proto_item_set_text(subtree, "Adhoc Message");
+    tree = subtree;
     
     int offset = 0;
-    int len = 0;
-    proto_tree_add_item_ret_uint(tree, sbv2_incoming_length, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN, &len); offset += sizeof(uint16_t); len -= 2;
+    guint type;
+    //int len = 0;
+    //proto_tree_add_item_ret_uint(tree, sbv2_incoming_length, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN, &len); offset += sizeof(uint16_t); len -= 2;
 
-    proto_tree_add_item(tree, sbv2_listreq_challenge, tvb, offset,  len, ENC_BIG_ENDIAN); offset += len;
+    //proto_tree_add_item(tree, sbv2_listreq_challenge, tvb, offset,  len, ENC_BIG_ENDIAN); offset += len;
 
+    proto_tree_add_item(tree, sbv2_incoming_length, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN); offset += sizeof(uint16_t);
+    proto_tree_add_item_ret_uint(tree, sbv2_request_type, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &type); offset += sizeof(uint8_t);
+
+    switch(type) {
+
+    }
 
     return tvb_captured_length(tvb);
 }
@@ -919,8 +930,7 @@ int dissect_sbv2(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* 
             }
 
             if(pdu_state->decrypted_tvb != NULL) {
-                add_new_data_source(pinfo, pdu_state->decrypted_tvb, "Adhoc Decrypted Data");
-
+                add_new_data_source(pinfo, pdu_state->decrypted_tvb, "Decrypted Data");
 
                 tcp_dissect_pdus(pdu_state->decrypted_tvb, pinfo, tree, TRUE, 2, get_sbv2_incoming_message_len, dissect_sbv2_response_adhoc, data);
             } else {
@@ -935,8 +945,7 @@ int dissect_sbv2(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* 
 
                 tvbuff_t* decrypted_tvb = tvb_new_real_data(decrypted_buffer, available, available);
 
-                add_new_data_source(pinfo, decrypted_tvb, "Adhoc Decrypted Data");
-
+                add_new_data_source(pinfo, decrypted_tvb, "Decrypted Data");
 
                 tcp_dissect_pdus(decrypted_tvb, pinfo, tree, TRUE, 2, get_sbv2_incoming_message_len, dissect_sbv2_response_adhoc, data);
 
