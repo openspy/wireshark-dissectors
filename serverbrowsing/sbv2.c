@@ -899,13 +899,18 @@ int dissect_sbv2_response_adhoc(tvbuff_t* tvb, packet_info* pinfo, proto_tree* t
     
     int offset = 0;
     guint type;
-    //int len = 0;
+    guint len = 0;
     //proto_tree_add_item_ret_uint(tree, sbv2_incoming_length, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN, &len); offset += sizeof(uint16_t); len -= 2;
 
     //proto_tree_add_item(tree, sbv2_listreq_challenge, tvb, offset,  len, ENC_BIG_ENDIAN); offset += len;
 
-    proto_tree_add_item(tree, sbv2_incoming_length, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN); offset += sizeof(uint16_t);
+    proto_tree_add_item_ret_uint(tree, sbv2_incoming_length, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN, &len); offset += sizeof(uint16_t);
     proto_tree_add_item_ret_uint(tree, sbv2_request_type, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &type); offset += sizeof(uint8_t);
+
+    len -= offset;
+
+
+    proto_tree_add_item(tree, sbv2_listreq_challenge, tvb, offset,  len, ENC_BIG_ENDIAN); offset += len;
 
     switch(type) {
 
