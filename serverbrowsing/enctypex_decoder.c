@@ -33,7 +33,12 @@ if you want to understand something take a look to gslist.c
 #include <time.h>
 #include <ctype.h>
 
-#include "serverbrowsing.h"
+
+typedef struct {
+    unsigned char   encxkey[261];   // static key
+    int             offset;         // everything decrypted till now (total)
+    int             start;          // where starts the buffer (so how much big is the header), this is the only one you need to zero
+} enctypex_data_t;
 
 
 

@@ -1,6 +1,7 @@
 #include "serverbrowsing.h"
 
 #define FIXED_HEADER_LEN 6
+#define ENCTYPEX_DATA_LEN 261
 
 int proto_sbv2 = -1;
 gint proto_sbv2_ett = -1;
@@ -87,13 +88,11 @@ static int* const listreq_options_bits[] = {
 };
 
 
-unsigned char *enctypex_decoder(unsigned char *key, unsigned char *validate, unsigned char *data, int *datalen, enctypex_data_t *enctypex_data);
-
 static hf_register_info sbv2_fields_hf[] = {
     //crypt command properties
     { &sbv2_incoming_length,
         { "incoming_length", "sbv2.incoming_length",
-        FT_INT16, BASE_DEC,
+        FT_UINT16, BASE_DEC,
         NULL, 0x0,
         NULL, HFILL }
     },
@@ -400,7 +399,7 @@ static hf_register_info sbv2_fields_hf[] = {
 };
 
 typedef struct _sbv2_conv_t {
-    enctypex_data_t enctypex_data;
+    char enctypex_data[ENCTYPEX_DATA_LEN];
     char challenge[LIST_CHALLENGE_LEN];
     int list_req_options;
     int response_server_list_end_pdu;
@@ -592,7 +591,7 @@ static guint
 
 
     //decrypt data...
-    enctypex_data_t ctx;
+    char ctx[ENCTYPEX_DATA_LEN];
     memset(&ctx, 0, sizeof(ctx));
 
     sbv2_conv_t *conv = get_sbv2_conversation_data(pinfo);
@@ -605,12 +604,12 @@ static guint
     int enctypex_data_len = offset - original_offset;
     void *key_data = tvb_memdup(wmem_packet_scope(), tvb, original_offset, enctypex_data_len);
     
-    enctypex_init(&ctx.encxkey, conv->query_from_game[2], conv->challenge, key_data, &enctypex_data_len, &ctx);
-
+    enctypex_init(&ctx, conv->query_from_game[2], conv->challenge, key_data, &enctypex_data_len, NULL);
+    memcpy(&conv->enctypex_data, &ctx, sizeof(ctx));
 
     guchar* decrypted_buffer = (guchar*)tvb_memdup(wmem_packet_scope(), tvb, offset, available);
-    enctypex_func6(&ctx.encxkey, decrypted_buffer, available);
-    
+    enctypex_func6(&ctx, decrypted_buffer, available);
+
     tvbuff_t* decrypted_tvb = tvb_new_real_data(decrypted_buffer, available, available);
     int dec_offset = 0;
 
@@ -721,6 +720,14 @@ static guint
 
     }
 
+    //now that len is known... decrypt only the list response data
+    tvb_free(decrypted_tvb);
+
+    decrypted_buffer = (guchar*)tvb_memdup(wmem_file_scope(), tvb, offset, dec_offset);
+    enctypex_func6(&conv->enctypex_data, decrypted_buffer, dec_offset);
+
+    decrypted_tvb = tvb_new_real_data(decrypted_buffer, dec_offset, dec_offset);
+
     sbv2_pdu_crypto_state *pdu_state = get_sbv2_pdu_crypto_state(pinfo);
     pdu_state->decrypted_tvb = decrypted_tvb;
     pdu_state->len = dec_offset;
@@ -741,7 +748,6 @@ int dissect_sbv2_response_list_item(tvbuff_t* tvb, packet_info* pinfo, proto_tre
     guint8 flags = tvb_get_guint8(tvb, offset);
     gint32 ip = 0;
 	proto_tree_add_bitmask_value(tree, tvb, len + offset, sbv2_listresp_server_flags, proto_sbv2_ett, server_updateflags_bits, flags); len += sizeof(uint8_t);
-
 
     ip = tvb_get_ntohl(tvb, offset + len);
 
@@ -886,78 +892,15 @@ int dissect_sbv2_response_crypt_header(tvbuff_t* tvb, packet_info* pinfo, proto_
 int dissect_sbv2_response_adhoc(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_) {
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "SBV2 Adhoc");
 
-    printf("dissect_sbv2_response_adhoc %d\n", pinfo->num);
-
-    sbv2_pdu_crypto_state *pdu_state = get_sbv2_pdu_crypto_state(pinfo);
-    add_new_data_source(pinfo, pdu_state->decrypted_tvb, "Decrypted Data");
-
-    return tvb_captured_length(pdu_state->decrypted_tvb);
-}
-
-static guint
-    get_sbv2_response_adhoc_len(packet_info* pinfo _U_, tvbuff_t* tvb, int original_offset, void* data _U_)
-{
-    sbv2_pdu_crypto_state *pdu_state = get_sbv2_pdu_crypto_state(pinfo);
-
-    if(pdu_state->decrypted_tvb != NULL) {
-        return pdu_state->len;
-    }
-
-    sbv2_conv_t *conv = get_sbv2_conversation_data(pinfo);
-    if(conv->query_from_game == NULL) {
-        return 0;
-    }
-
-
     
-
     int offset = 0;
-    char len_data[2];
-    uint16_t *len_data_ptr = (uint16_t *)&len_data[0];
-    len_data[0] = tvb_get_guint8(tvb, offset++);
-    len_data[1] = tvb_get_guint8(tvb, offset++);
+    int len = 0;
+    proto_tree_add_item_ret_uint(tree, sbv2_incoming_length, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN, &len); offset += sizeof(uint16_t); len -= 2;
 
-    enctypex_func6(&conv->enctypex_data, (char *)&len_data[0], offset);
-    
-
-    uint16_t len = ntohs(*len_data_ptr);
-
-    printf("PDU len: %d - %d\n", pinfo->num, len);
-
-    gint available = tvb_reported_length_remaining(tvb, offset);
-
-    if(available < len) {
-        pinfo->desegment_offset = 0;
-        pinfo->desegment_len = len;
-        return 0;
-    }
+    proto_tree_add_item(tree, sbv2_listreq_challenge, tvb, offset,  len, ENC_BIG_ENDIAN); offset += len;
 
 
-
-
-    pdu_state->decrypted_buffer = (guchar*)tvb_memdup(wmem_packet_scope(), tvb, 0, len);
-    pdu_state->len = len;
-    
-    guchar *dec_buffer = pdu_state->decrypted_buffer;
-
-    dec_buffer[0] = len_data[0];
-    dec_buffer[1] = len_data[1];
-    dec_buffer += 2;
-    len -= 2;
-
-    // while(len--) {
-    //     enctypex_func6(&conv->enctypex_data, (char *)dec_buffer, 1);
-    //     dec_buffer++;
-    // }
-
-    enctypex_func6(&conv->enctypex_data, (char *)dec_buffer, len);
-    
-    show_dump(0, pdu_state->decrypted_buffer, pdu_state->len, stdout);
-
-    pdu_state->decrypted_tvb  = tvb_new_real_data(pdu_state->decrypted_buffer, len, len);
-
-    printf("adhoc len: %d - %d\n", pinfo->num, pdu_state->len);
-    return pdu_state->len;
+    return tvb_captured_length(tvb);
 }
 
 int dissect_sbv2(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_) { 
@@ -969,11 +912,43 @@ int dissect_sbv2(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* 
         if(pinfo->num <= conv->response_server_list_end_pdu || conv->response_server_list_end_pdu == 0) {
             tcp_dissect_pdus(tvb, pinfo, tree, TRUE, 2, get_sbv2_response_crypt_random_len, dissect_sbv2_response_crypt_header, data);
         } else {
-            printf("dissect pdu num: %d\n", pinfo->num);
-            tcp_dissect_pdus(tvb, pinfo, tree, TRUE, 2, get_sbv2_response_adhoc_len, dissect_sbv2_response_adhoc, data);
+            sbv2_pdu_crypto_state *pdu_state = get_sbv2_pdu_crypto_state(pinfo);
+
+            if(conv->query_from_game == NULL) {
+                return 0;
+            }
+
+            if(pdu_state->decrypted_tvb != NULL) {
+                add_new_data_source(pinfo, pdu_state->decrypted_tvb, "Adhoc Decrypted Data");
+
+
+                tcp_dissect_pdus(pdu_state->decrypted_tvb, pinfo, tree, TRUE, 2, get_sbv2_incoming_message_len, dissect_sbv2_response_adhoc, data);
+            } else {
+                int available = tvb_reported_length_remaining(tvb, 0);
+
+                char enctypex_data[ENCTYPEX_DATA_LEN];
+                memcpy(&enctypex_data, &conv->enctypex_data, sizeof(enctypex_data));
+
+                guchar* decrypted_buffer = (guchar*)tvb_memdup(wmem_file_scope(), tvb, 0, available);
+
+                enctypex_func6(&enctypex_data, decrypted_buffer, available);
+
+                tvbuff_t* decrypted_tvb = tvb_new_real_data(decrypted_buffer, available, available);
+
+                add_new_data_source(pinfo, decrypted_tvb, "Adhoc Decrypted Data");
+
+
+                tcp_dissect_pdus(decrypted_tvb, pinfo, tree, TRUE, 2, get_sbv2_incoming_message_len, dissect_sbv2_response_adhoc, data);
+
+                memcpy(&conv->enctypex_data, &enctypex_data, sizeof(enctypex_data));
+
+                pdu_state->decrypted_buffer = decrypted_buffer;
+                pdu_state->decrypted_tvb = decrypted_tvb;
+                pdu_state->len = available;
+            }
+
         }        
-    }
-   
+    }   
     return tvb_captured_length(tvb);
 }
 

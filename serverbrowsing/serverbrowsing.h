@@ -8,12 +8,6 @@
 
 //sbv2 stuff
 
-typedef struct {
-    unsigned char   encxkey[261];   // static key
-    int             offset;         // everything decrypted till now (total)
-    int             start;          // where starts the buffer (so how much big is the header), this is the only one you need to zero
-} enctypex_data_t;
-
 //message types for outgoing requests
 #define SERVER_LIST_REQUEST		0
 #define SERVER_INFO_REQUEST		1
