@@ -430,12 +430,24 @@ static hf_register_info sbv2_fields_hf[] = {
     //
 };
 
+typedef struct {
+    uint8_t field_type;
+    const char *field_name;
+} FieldInfo;
+
 typedef struct _sbv2_conv_t {
     char enctypex_data[ENCTYPEX_DATA_LEN];
     char challenge[LIST_CHALLENGE_LEN];
     int list_req_options;
     int response_server_list_end_pdu;
     const char** query_from_game; //pointer to gslist_keys
+
+    int num_fields;
+    FieldInfo *fields;
+
+    int num_push_fields;
+    FieldInfo *push_fields;
+
 
     const char **popular_keys;
     uint8_t num_popular_keys;
@@ -446,11 +458,6 @@ typedef struct _sbv2_pdu_crypto_state {
 	tvbuff_t *decrypted_tvb;
     int len;
 } sbv2_pdu_crypto_state;
-
-typedef struct {
-    uint8_t field_type;
-    const char *field_name;
-} FieldInfo;
 
 static sbv2_conv_t* get_sbv2_conversation_data(packet_info* pinfo)
 {
@@ -771,7 +778,7 @@ static guint
     return (guint)offset + dec_offset;
 }
 
-int dissect_sbv2_response_list_item(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int offset, guint32 num_keys, FieldInfo *fields) {
+int dissect_sbv2_response_list_item(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int offset, guint32 num_keys, FieldInfo *fields, int use_popular_list) {
     sbv2_conv_t *conv = get_sbv2_conversation_data(pinfo);
 
     proto_item* ti = proto_tree_add_item(tree, proto_sbv2, tvb, 0, -1, ENC_NA);
@@ -817,27 +824,27 @@ int dissect_sbv2_response_list_item(tvbuff_t* tvb, packet_info* pinfo, proto_tre
         proto_item_set_text(subtree, "Keys");
     
         for(int i=0;i<num_keys;i++) {
-            len += dissect_sbv2_server_key(tvb, pinfo, subtree, NULL, len + offset, &fields[i], conv->popular_keys);
+            len += dissect_sbv2_server_key(tvb, pinfo, subtree, NULL, len + offset, &fields[i], conv->popular_keys, use_popular_list);
         }
     }
     return len;
 }
 
-int dissect_sbv2_server_key(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int initial_offset, FieldInfo *field, const char** popular_keys) {
+int dissect_sbv2_server_key(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int initial_offset, FieldInfo *field, const char** popular_keys, int use_popular_list) {
     guint32 str_index;
     int offset = initial_offset;
     proto_item* key_ti = proto_tree_add_item(tree, proto_sbv2, tvb, 0, -1, ENC_NA);
     proto_tree* key_subtree = proto_item_add_subtree(key_ti, proto_sbv2_ett);
     proto_item_set_text(key_subtree, field->field_name);
-    if(field->field_type == 0) {
-
-    } else {
-
-    }
-
+    
     switch(field->field_type) {
         case KEYTYPE_STRING:
-            proto_tree_add_item_ret_uint(key_subtree, sbv2_listresp_server_field_strindex, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &str_index); offset += sizeof(uint8_t);
+            if(use_popular_list) {
+                proto_tree_add_item_ret_uint(key_subtree, sbv2_listresp_server_field_strindex, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &str_index); offset += sizeof(uint8_t);
+            } else {
+                str_index = 0xFFFFFFFF;
+            }
+
             if (((uint8_t)str_index) == 0xFF) {
                 int str_remaining = tvb_reported_length_remaining(tvb, offset);
                 gint str_len = tvb_strnlen(tvb, offset, str_remaining);
@@ -877,14 +884,17 @@ int dissect_sbv2_response_list_header(tvbuff_t* tvb, packet_info* pinfo, proto_t
 
 
     
-    FieldInfo *fields = (FieldInfo *)wmem_alloc0(pinfo->pool, sizeof(FieldInfo) * num_keys);
+    FieldInfo *fields = (FieldInfo *)wmem_alloc0(wmem_file_scope(), sizeof(FieldInfo) * num_keys);
+
+    conv->num_fields = num_keys;
+    conv->fields = fields;
 
     for(int i=0;i<num_keys;i++) {
         guint32 field_type;
         proto_tree_add_item_ret_uint(subtree, sbv2_listresp_field_type, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &field_type); offset += sizeof(uint8_t);
         int str_remaining = tvb_reported_length_remaining(tvb, offset);
         gint str_len = tvb_strnlen(tvb, offset, str_remaining);
-        const char *string = (const char *)tvb_get_string_enc(pinfo->pool, tvb, offset, str_len, ENC_ASCII);
+        const char *string = (const char *)tvb_get_string_enc(wmem_file_scope(), tvb, offset, str_len, ENC_ASCII);
         fields[i].field_type = field_type;
         fields[i].field_name = string;
         proto_tree_add_item(subtree, sbv2_listresp_field_name, tvb, offset, str_len + 1, ENC_BIG_ENDIAN); offset += str_len + 1;
@@ -914,7 +924,7 @@ int dissect_sbv2_response_list_header(tvbuff_t* tvb, packet_info* pinfo, proto_t
     }
 
     while(true) {
-        int len = dissect_sbv2_response_list_item(tvb, pinfo, tree, data, offset, num_keys, fields);
+        int len = dissect_sbv2_response_list_item(tvb, pinfo, tree, data, offset, num_keys, fields, 1);
         if(len < 0) {
             offset += -len;
             break;
@@ -958,6 +968,8 @@ int dissect_sbv2_response_crypt_header(tvbuff_t* tvb, packet_info* pinfo, proto_
 }
 
 int dissect_sbv2_response_adhoc(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_) {
+    sbv2_conv_t *conv = get_sbv2_conversation_data(pinfo);
+
     col_set_str(pinfo->cinfo, COL_PROTOCOL, "SBV2 Adhoc");
 
     proto_item* ti = proto_tree_add_item(tree, proto_sbv2, tvb, 0, -1, ENC_NA);
@@ -987,6 +999,7 @@ int dissect_sbv2_response_adhoc(tvbuff_t* tvb, packet_info* pinfo, proto_tree* t
             break;
         case PUSH_SERVER_MESSAGE:
             proto_tree_add_string(tree, sbv2_adhoc_type_name, tvb, offset - 1, sizeof(uint8_t), "PUSH_SERVER_MESSAGE");
+            return dissect_sbv2_response_list_item(tvb, pinfo, tree, NULL, offset, conv->num_push_fields, conv->push_fields, 0);
             break;
         case KEEPALIVE_MESSAGE:   
             proto_tree_add_string(tree, sbv2_adhoc_type_name, tvb, offset - 1, sizeof(uint8_t), "KEEPALIVE_MESSAGE");
@@ -1008,16 +1021,27 @@ int dissect_sbv2_response_adhoc(tvbuff_t* tvb, packet_info* pinfo, proto_tree* t
 int dissect_sbv2_adhoc_pushkeys_msg(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int initial_offset) {
     int offset = initial_offset;
 
+    sbv2_conv_t *conv = get_sbv2_conversation_data(pinfo);
+
     guint32 num_popular_keys;
     proto_tree_add_item_ret_uint(tree, sbv2_listresp_num_popular_values, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &num_popular_keys); offset += sizeof(uint8_t);
+
+    conv->num_push_fields = num_popular_keys;
+    conv->push_fields = (FieldInfo *)wmem_alloc0(wmem_file_scope(), sizeof(FieldInfo) * num_popular_keys);
 
     for(int i=0;i<num_popular_keys;i++) {
         proto_item* ti = proto_tree_add_item(tree, proto_sbv2, tvb, 0, -1, ENC_NA);
         proto_tree* subtree = proto_item_add_subtree(ti, proto_sbv2_ett);
         proto_item_set_text(subtree, "Field");
-        proto_tree_add_item(subtree, sbv2_listresp_server_field_keytype, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN); offset += sizeof(uint8_t);
+        guint32 key_type;
+        proto_tree_add_item_ret_uint(subtree, sbv2_listresp_server_field_keytype, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &key_type); offset += sizeof(uint8_t);
         int str_remaining = tvb_reported_length_remaining(tvb, offset);
         gint str_len = tvb_strnlen(tvb, offset, str_remaining) + 1;
+
+        const char *string = (const char *)tvb_get_string_enc(wmem_file_scope(), tvb, offset, str_len, ENC_ASCII);
+        conv->push_fields[i].field_name = string;
+        conv->push_fields[i].field_type = key_type;
+
         proto_tree_add_item(subtree, sbv2_listresp_server_field_keyvalue_string, tvb, offset, str_len, ENC_BIG_ENDIAN); offset += str_len;
     }
     return offset;
