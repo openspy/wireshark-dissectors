@@ -507,7 +507,21 @@ static sbv2_pdu_crypto_state* get_sbv2_pdu_crypto_state(packet_info* pinfo) {
     return conv_data;
 }
 
+int dissect_sbv2_sendmsg_request(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int initial_offset) {
+    int offset = initial_offset;
+    proto_tree_add_item(tree, sbv2_listresp_public_ip, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN); offset += sizeof(uint32_t);
+    proto_tree_add_item(tree, sbv2_listresp_query_port, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN); offset += sizeof(uint16_t);
+    int data_len = tvb_reported_length_remaining(tvb, offset);
+    proto_tree_add_item(tree, sbv2_listreq_challenge, tvb, offset,  data_len, ENC_BIG_ENDIAN); 
+    return initial_offset - offset;
+}
 
+int dissect_sbv2_server_info_request(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int initial_offset) {
+    int offset = initial_offset;
+    proto_tree_add_item(tree, sbv2_listresp_public_ip, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN); offset += sizeof(uint32_t);
+    proto_tree_add_item(tree, sbv2_listresp_query_port, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN); offset += sizeof(uint16_t);
+    return initial_offset - offset;
+}
 int dissect_sbv2_list_request(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int offset) {
     sbv2_conv_t *conv = get_sbv2_conversation_data(pinfo);
 
@@ -560,9 +574,11 @@ int dissect_sbv2_client_stream(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tr
             return dissect_sbv2_list_request(tvb, pinfo, tree, data, offset);
         case SERVER_INFO_REQUEST:
             proto_tree_add_string(tree, sbv2_request_name, tvb, offset - 1, sizeof(uint8_t), "SERVER_INFO_REQUEST");
+            return dissect_sbv2_server_info_request(tvb, pinfo, tree, data, offset);
         break;
         case SEND_MESSAGE_REQUEST:
             proto_tree_add_string(tree, sbv2_request_name, tvb, offset - 1, sizeof(uint8_t), "SEND_MESSAGE_REQUEST");
+            return dissect_sbv2_sendmsg_request(tvb, pinfo, tree, data, offset);
         break;
         case KEEPALIVE_REPLY:
             proto_tree_add_string(tree, sbv2_request_name, tvb, offset - 1, sizeof(uint8_t), "KEEPALIVE_REPLY");
@@ -827,6 +843,23 @@ int dissect_sbv2_response_list_item(tvbuff_t* tvb, packet_info* pinfo, proto_tre
             len += dissect_sbv2_server_key(tvb, pinfo, subtree, NULL, len + offset, &fields[i], conv->popular_keys, use_popular_list);
         }
     }
+    if(flags & HAS_FULL_RULES_FLAG) {
+        proto_item* ti = proto_tree_add_item(tree, proto_sbv2, tvb, 0, -1, ENC_NA);
+        proto_tree* subtree = proto_item_add_subtree(ti, proto_sbv2_ett);
+        proto_item_set_text(subtree, "Full Keys");
+        while(true) {
+            int str_remaining = tvb_reported_length_remaining(tvb, len + offset);
+            gint str_len = tvb_strnlen(tvb, len + offset, str_remaining);
+            if(str_len == 0) {
+                break;
+            }
+            proto_tree_add_item(subtree, sbv2_listresp_server_field_keyvalue_string, tvb, len + offset, str_len + 1, ENC_BIG_ENDIAN); len += str_len + 1;
+
+            str_remaining = tvb_reported_length_remaining(tvb, len + offset);
+            str_len = tvb_strnlen(tvb, len + offset, str_remaining);
+            proto_tree_add_item(subtree, sbv2_listresp_server_field_keyvalue_string, tvb, len + offset, str_len + 1, ENC_BIG_ENDIAN); len += str_len + 1;
+        }
+    }
     return len;
 }
 
@@ -1006,6 +1039,7 @@ int dissect_sbv2_response_adhoc(tvbuff_t* tvb, packet_info* pinfo, proto_tree* t
             break;
         case DELETE_SERVER_MESSAGE:
             proto_tree_add_string(tree, sbv2_adhoc_type_name, tvb, offset - 1, sizeof(uint8_t), "DELETE_SERVER_MESSAGE");
+            return dissect_sbv2_adhoc_delete_msg(tvb, pinfo, tree, NULL, offset);
             break;
         case MAPLOOP_MESSAGE:
             proto_tree_add_string(tree, sbv2_adhoc_type_name, tvb, offset - 1, sizeof(uint8_t), "MAPLOOP_MESSAGE");
@@ -1017,7 +1051,12 @@ int dissect_sbv2_response_adhoc(tvbuff_t* tvb, packet_info* pinfo, proto_tree* t
 
     return tvb_captured_length(tvb);
 }
+int dissect_sbv2_adhoc_delete_msg(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int initial_offset) {
+    int offset = initial_offset;
+    proto_tree_add_item(tree, sbv2_listresp_public_ip, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN); offset += sizeof(uint32_t);
+    proto_tree_add_item(tree, sbv2_listresp_query_port, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN); offset += sizeof(uint16_t);
 
+}
 int dissect_sbv2_adhoc_pushkeys_msg(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int initial_offset) {
     int offset = initial_offset;
 
