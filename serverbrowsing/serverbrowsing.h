@@ -8,6 +8,10 @@
 
 //sbv2 stuff
 
+#define KEYTYPE_STRING	0
+#define KEYTYPE_BYTE	1
+#define KEYTYPE_SHORT	2
+
 //message types for outgoing requests
 #define SERVER_LIST_REQUEST		0
 #define SERVER_INFO_REQUEST		1

@@ -63,7 +63,8 @@ int sbv2_listresp_server_updateflags_has_fullkeys_flag = -1;
 int sbv2_listresp_server_field_strindex = -1;
 int sbv2_listresp_server_field_keytype = -1;
 int sbv2_listresp_server_field_keyname = -1;
-int sbv2_listresp_server_field_keyvalue = -1;
+int sbv2_listresp_server_field_keyvalue_string = -1;
+int sbv2_listresp_server_field_keyvalue_int = -1;
 
 static int* const server_updateflags_bits[] = {
 	&sbv2_listresp_server_updateflags_unsolicited_udp_flag,
@@ -86,6 +87,10 @@ static int* const listreq_options_bits[] = {
 	&sbv2_listreq_options_limit_result_count,
 	NULL
 };
+
+int sbv2_adhoc_len = -1;
+int sbv2_adhoc_type = -1;
+int sbv2_adhoc_type_name = -1;
 
 
 static hf_register_info sbv2_fields_hf[] = {
@@ -315,9 +320,15 @@ static hf_register_info sbv2_fields_hf[] = {
         NULL, 0x0,
         NULL, HFILL }
     },
-    { &sbv2_listresp_server_field_keyvalue,
-        { "field.keyvalue", "sbv2.listresp.field.keyvalue",
+    { &sbv2_listresp_server_field_keyvalue_string,
+        { "field.keyvalue_string", "sbv2.listresp.field.keyvalue_string",
         FT_STRING, BASE_NONE,
+        NULL, 0x0,
+        NULL, HFILL }
+    },
+    { &sbv2_listresp_server_field_keyvalue_int,
+        { "field.keyvalue_int", "sbv2.listresp.field.keyvalue_int",
+        FT_UINT16, BASE_DEC,
         NULL, 0x0,
         NULL, HFILL }
     },
@@ -396,6 +407,27 @@ static hf_register_info sbv2_fields_hf[] = {
         NULL, 0x0,
         NULL, HFILL }
     },
+
+    //adhoc
+    { &sbv2_adhoc_len,
+        { "adhoc.len", "sbv2.adhoc.len",
+        FT_UINT16, BASE_DEC,
+        NULL, 0x0,
+        NULL, HFILL }
+    }, 
+    { &sbv2_adhoc_type,
+        { "adhoc.type", "sbv2.adhoc.type",
+        FT_UINT8, BASE_DEC,
+        NULL, 0x0,
+        NULL, HFILL }
+    },   
+    { &sbv2_adhoc_type_name,
+        { "adhoc.type_name", "sbv2.adhoc.type_name",
+        FT_STRING, BASE_NONE,
+        NULL, 0x0,
+        NULL, HFILL }
+    },
+    //
 };
 
 typedef struct _sbv2_conv_t {
@@ -404,6 +436,9 @@ typedef struct _sbv2_conv_t {
     int list_req_options;
     int response_server_list_end_pdu;
     const char** query_from_game; //pointer to gslist_keys
+
+    const char **popular_keys;
+    uint8_t num_popular_keys;
 } sbv2_conv_t;
 
 typedef struct _sbv2_pdu_crypto_state {
@@ -782,21 +817,48 @@ int dissect_sbv2_response_list_item(tvbuff_t* tvb, packet_info* pinfo, proto_tre
         proto_item_set_text(subtree, "Keys");
     
         for(int i=0;i<num_keys;i++) {
-            proto_item* key_ti = proto_tree_add_item(subtree, proto_sbv2, tvb, 0, -1, ENC_NA);
-            proto_tree* key_subtree = proto_item_add_subtree(key_ti, proto_sbv2_ett);
-            proto_item_set_text(key_subtree, fields[i].field_name);
-            proto_tree_add_item(key_subtree, sbv2_listresp_server_field_strindex, tvb, len + offset, sizeof(uint8_t), ENC_BIG_ENDIAN); len += sizeof(uint8_t);
-            int str_remaining = tvb_reported_length_remaining(tvb, len + offset);
-            gint str_len = tvb_strnlen(tvb, len + offset, str_remaining);
-            //sbv2_listresp_server_field_keyname
-            proto_tree_add_uint(key_subtree, sbv2_listresp_server_field_keytype, tvb, len + offset, str_len + 1, fields[i].field_type);
-            proto_tree_add_string(key_subtree, sbv2_listresp_server_field_keyname, tvb, len + offset, str_len + 1, fields[i].field_name);
-            proto_tree_add_item(key_subtree, sbv2_listresp_server_field_keyvalue, tvb, len + offset, str_len + 1, ENC_BIG_ENDIAN); len += str_len + 1;
+            len += dissect_sbv2_server_key(tvb, pinfo, subtree, NULL, len + offset, &fields[i], conv->popular_keys);
         }
     }
     return len;
 }
 
+int dissect_sbv2_server_key(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int initial_offset, FieldInfo *field, const char** popular_keys) {
+    guint32 str_index;
+    int offset = initial_offset;
+    proto_item* key_ti = proto_tree_add_item(tree, proto_sbv2, tvb, 0, -1, ENC_NA);
+    proto_tree* key_subtree = proto_item_add_subtree(key_ti, proto_sbv2_ett);
+    proto_item_set_text(key_subtree, field->field_name);
+    if(field->field_type == 0) {
+
+    } else {
+
+    }
+
+    switch(field->field_type) {
+        case KEYTYPE_STRING:
+            proto_tree_add_item_ret_uint(key_subtree, sbv2_listresp_server_field_strindex, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &str_index); offset += sizeof(uint8_t);
+            if (((uint8_t)str_index) == 0xFF) {
+                int str_remaining = tvb_reported_length_remaining(tvb, offset);
+                gint str_len = tvb_strnlen(tvb, offset, str_remaining);
+                proto_tree_add_uint(key_subtree, sbv2_listresp_server_field_keytype, tvb, offset, str_len + 1, field->field_type);
+                proto_tree_add_string(key_subtree, sbv2_listresp_server_field_keyname, tvb, offset, str_len + 1, field->field_name);
+
+                proto_tree_add_item(key_subtree, sbv2_listresp_server_field_keyvalue_string, tvb, offset, str_len + 1, ENC_BIG_ENDIAN); offset += str_len + 1;
+            } else {
+                proto_tree_add_string(key_subtree, sbv2_listresp_server_field_keyvalue_string, tvb, offset - sizeof(uint8_t), sizeof(uint8_t), popular_keys[str_index]);
+            }
+            break;
+        case KEYTYPE_BYTE:
+            proto_tree_add_item(key_subtree, sbv2_listresp_server_field_keyvalue_int, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN); offset += sizeof(uint8_t);
+            break;
+        case KEYTYPE_SHORT:
+            proto_tree_add_item(key_subtree, sbv2_listresp_server_field_keyvalue_int, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN); offset += sizeof(uint16_t);
+            break;        
+    }
+
+    return offset - initial_offset;
+}
 int dissect_sbv2_response_list_header(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int offset) {
     sbv2_conv_t *conv = get_sbv2_conversation_data(pinfo);
     conv->response_server_list_end_pdu = pinfo->num;
@@ -822,9 +884,9 @@ int dissect_sbv2_response_list_header(tvbuff_t* tvb, packet_info* pinfo, proto_t
         proto_tree_add_item_ret_uint(subtree, sbv2_listresp_field_type, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &field_type); offset += sizeof(uint8_t);
         int str_remaining = tvb_reported_length_remaining(tvb, offset);
         gint str_len = tvb_strnlen(tvb, offset, str_remaining);
-        guint8 *string = tvb_get_string_enc(pinfo->pool, tvb, offset, str_len, ENC_ASCII);
+        const char *string = (const char *)tvb_get_string_enc(pinfo->pool, tvb, offset, str_len, ENC_ASCII);
         fields[i].field_type = field_type;
-        fields[i].field_name = (const char *)string;
+        fields[i].field_name = string;
         proto_tree_add_item(subtree, sbv2_listresp_field_name, tvb, offset, str_len + 1, ENC_BIG_ENDIAN); offset += str_len + 1;
     }
 
@@ -837,13 +899,19 @@ int dissect_sbv2_response_list_header(tvbuff_t* tvb, packet_info* pinfo, proto_t
     subtree = proto_item_add_subtree(ti, proto_sbv2_ett);
     proto_item_set_text(subtree, "Popular Values");
 
-    for(int i=0;i<num_popular_keys;i++) {
-        int str_remaining = tvb_reported_length_remaining(tvb, offset);
-        gint str_len = tvb_strnlen(tvb, offset, str_remaining);
+    conv->num_popular_keys = num_popular_keys;
+    if(num_popular_keys > 0) {
+        conv->popular_keys = (const char **)wmem_alloc0(pinfo->pool, sizeof(const char *) * num_popular_keys);
+        for(int i=0;i<num_popular_keys;i++) {
+            int str_remaining = tvb_reported_length_remaining(tvb, offset);
+            gint str_len = tvb_strnlen(tvb, offset, str_remaining);
 
-        proto_tree_add_item(subtree, sbv2_listresp_popular_value, tvb, offset, str_len + 1, ENC_BIG_ENDIAN); offset += str_len + 1;
+            const char *string = (const char *)tvb_get_string_enc(pinfo->pool, tvb, offset, str_len + 1, ENC_ASCII);
+            conv->popular_keys[i] = string;
+
+            proto_tree_add_item(subtree, sbv2_listresp_popular_value, tvb, offset, str_len + 1, ENC_BIG_ENDIAN); offset += str_len + 1;
+        }
     }
-
 
     while(true) {
         int len = dissect_sbv2_response_list_item(tvb, pinfo, tree, data, offset, num_keys, fields);
@@ -904,16 +972,33 @@ int dissect_sbv2_response_adhoc(tvbuff_t* tvb, packet_info* pinfo, proto_tree* t
 
     //proto_tree_add_item(tree, sbv2_listreq_challenge, tvb, offset,  len, ENC_BIG_ENDIAN); offset += len;
 
-    proto_tree_add_item_ret_uint(tree, sbv2_incoming_length, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN, &len); offset += sizeof(uint16_t);
-    proto_tree_add_item_ret_uint(tree, sbv2_request_type, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &type); offset += sizeof(uint8_t);
+    proto_tree_add_item_ret_uint(tree, sbv2_adhoc_len, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN, &len); offset += sizeof(uint16_t);
+    proto_tree_add_item_ret_uint(tree, sbv2_adhoc_type, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &type); offset += sizeof(uint8_t);
 
     len -= offset;
 
 
-    proto_tree_add_item(tree, sbv2_listreq_challenge, tvb, offset,  len, ENC_BIG_ENDIAN); offset += len;
+    //proto_tree_add_item(tree, sbv2_listreq_challenge, tvb, offset,  len, ENC_BIG_ENDIAN); offset += len;
 
     switch(type) {
-
+        case PUSH_KEYS_MESSAGE:
+            proto_tree_add_string(tree, sbv2_adhoc_type_name, tvb, offset - 1, sizeof(uint8_t), "PUSH_KEYS_MESSAGE");
+            break;
+        case PUSH_SERVER_MESSAGE:
+            proto_tree_add_string(tree, sbv2_adhoc_type_name, tvb, offset - 1, sizeof(uint8_t), "PUSH_SERVER_MESSAGE");
+            break;
+        case KEEPALIVE_MESSAGE:   
+            proto_tree_add_string(tree, sbv2_adhoc_type_name, tvb, offset - 1, sizeof(uint8_t), "KEEPALIVE_MESSAGE");
+            break;
+        case DELETE_SERVER_MESSAGE:
+            proto_tree_add_string(tree, sbv2_adhoc_type_name, tvb, offset - 1, sizeof(uint8_t), "DELETE_SERVER_MESSAGE");
+            break;
+        case MAPLOOP_MESSAGE:
+            proto_tree_add_string(tree, sbv2_adhoc_type_name, tvb, offset - 1, sizeof(uint8_t), "MAPLOOP_MESSAGE");
+            break;
+        case PLAYERSEARCH_MESSAGE:
+            proto_tree_add_string(tree, sbv2_adhoc_type_name, tvb, offset - 1, sizeof(uint8_t), "PLAYERSEARCH_MESSAGE");
+            break;
     }
 
     return tvb_captured_length(tvb);
