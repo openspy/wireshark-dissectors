@@ -656,8 +656,6 @@ static guint
     if(conv->query_from_game == NULL) { //XXX:: handle this better?
         return 0;
     }
-    
-
 
     int enctypex_data_len = offset - original_offset;
     void *key_data = tvb_memdup(wmem_packet_scope(), tvb, original_offset, enctypex_data_len);
@@ -679,103 +677,137 @@ static guint
         return 0;
     }
 
-
     //skip fixed header
     dec_offset += FIXED_HEADER_LEN;
     available -= FIXED_HEADER_LEN;
 
-
-    if(available < 1) { 
-        pinfo->desegment_offset = original_offset;
-        pinfo->desegment_len = 1;
-        tvb_free(decrypted_tvb);
-        return 0;
-    }
-
-    //calculate key list
-    guint8 key_list_size = tvb_get_guint8(decrypted_tvb, dec_offset++);
-    available--;
-    for(int i=0;i<key_list_size;i++) {
-        
-        guint8 key_type = tvb_get_guint8(decrypted_tvb, dec_offset++); available--;
-        int str_remaining = tvb_reported_length_remaining(decrypted_tvb, dec_offset);
-        gint len = tvb_strnlen(decrypted_tvb, dec_offset, str_remaining);
-        if(len == -1) {
+    if(!(conv->list_req_options & NO_SERVER_LIST)) {
+        if(available < 1) { 
             pinfo->desegment_offset = original_offset;
-            pinfo->desegment_len = DESEGMENT_ONE_MORE_SEGMENT;
+            pinfo->desegment_len = 1;
             tvb_free(decrypted_tvb);
             return 0;
         }
-        dec_offset += len + 1;
-        available -= len + 1;
-    }
 
-    if(available < 1) { 
-        pinfo->desegment_offset = original_offset;
-        pinfo->desegment_len = 1;
-        return 0;
-    }
-    //calculate unique list
-    guint8 unique_list_size = tvb_get_guint8(decrypted_tvb, dec_offset++);
-    available --;
-
-    for(int i=0;i<unique_list_size;i++) {
-        int str_remaining = tvb_reported_length_remaining(decrypted_tvb, dec_offset);
-        gint str_len = tvb_strnlen(decrypted_tvb, dec_offset, str_remaining);
-        if(str_len == -1) {
-            pinfo->desegment_offset = original_offset;
-            pinfo->desegment_len = DESEGMENT_ONE_MORE_SEGMENT;
-            tvb_free(decrypted_tvb);
-            return 0;
-        }
-        dec_offset += str_len + 1;
-        available -= str_len + 1;
-    }
-
-    //calculate main server list
-
-
-    while(1) {
-        if(available < 5) {
-            pinfo->desegment_offset = original_offset;
-            pinfo->desegment_len = 5;
-            tvb_free(decrypted_tvb);
-            return 0;
-        }
-        
-        guint8 flags = tvb_get_guint8(decrypted_tvb, dec_offset++);
+        //calculate key list
+        guint8 key_list_size = tvb_get_guint8(decrypted_tvb, dec_offset++);
         available--;
-        int expected_size = ServerSizeForFlags(flags) - 1;
-        if(available < expected_size) { 
+
+        guint8 *key_types = (guint8 *)wmem_alloc0(wmem_packet_scope(), sizeof(guint8) * key_list_size);
+        for(int i=0;i<key_list_size;i++) {
+            
+            guint8 key_type = tvb_get_guint8(decrypted_tvb, dec_offset++); available--;
+            key_types[i] = key_type;
+            int str_remaining = tvb_reported_length_remaining(decrypted_tvb, dec_offset);
+            gint len = tvb_strnlen(decrypted_tvb, dec_offset, str_remaining);
+            if(len == -1) {
+                pinfo->desegment_offset = original_offset;
+                pinfo->desegment_len = DESEGMENT_ONE_MORE_SEGMENT;
+                tvb_free(decrypted_tvb);
+                return 0;
+            }
+            dec_offset += len + 1;
+            available -= len + 1;
+        }
+
+        if(available < 1) { 
             pinfo->desegment_offset = original_offset;
-            pinfo->desegment_len = expected_size;
-            tvb_free(decrypted_tvb);
+            pinfo->desegment_len = 1;
             return 0;
         }
+        //calculate unique list
+        guint8 unique_list_size = tvb_get_guint8(decrypted_tvb, dec_offset++);
+        available --;
 
-        guint32 ip = tvb_get_ntohl(decrypted_tvb, dec_offset);
-        dec_offset += expected_size;
-        available -= expected_size;
-        if(ip == 0xFFFFFFFF) {
-            break;            
+        for(int i=0;i<unique_list_size;i++) {
+            int str_remaining = tvb_reported_length_remaining(decrypted_tvb, dec_offset);
+            gint str_len = tvb_strnlen(decrypted_tvb, dec_offset, str_remaining);
+            if(str_len == -1) {
+                pinfo->desegment_offset = original_offset;
+                pinfo->desegment_len = DESEGMENT_ONE_MORE_SEGMENT;
+                tvb_free(decrypted_tvb);
+                return 0;
+            }
+            dec_offset += str_len + 1;
+            available -= str_len + 1;
         }
 
-        if(flags & HAS_KEYS_FLAG) {
-            for(int i=0;i<key_list_size;i++) {
-                guint8 string_index = tvb_get_guint8(decrypted_tvb, dec_offset++); available--;
-                int str_remaining = tvb_reported_length_remaining(decrypted_tvb, dec_offset);
-                gint len = tvb_strnlen(decrypted_tvb, dec_offset, str_remaining);
-                if(len == -1) {
-                    pinfo->desegment_offset = original_offset;
-                    pinfo->desegment_len = DESEGMENT_ONE_MORE_SEGMENT;
-                    tvb_free(decrypted_tvb);
-                    return 0;
+        //calculate main server list
+
+        while(1) {
+            if(available < 1) {
+                pinfo->desegment_offset = original_offset;
+                pinfo->desegment_len = 1;
+                tvb_free(decrypted_tvb);
+                return 0;
+            }
+            
+            guint8 flags = tvb_get_guint8(decrypted_tvb, dec_offset++);
+            available--;
+            int expected_size = ServerSizeForFlags(flags) - 1;
+            if(available < expected_size) { 
+                pinfo->desegment_offset = original_offset;
+                pinfo->desegment_len = expected_size;
+                tvb_free(decrypted_tvb);
+                return 0;
+            }
+
+            guint32 ip = tvb_get_ntohl(decrypted_tvb, dec_offset);
+            dec_offset += expected_size;
+            available -= expected_size;
+            if(ip == 0xFFFFFFFF) {
+                break;            
+            }
+
+            if(flags & HAS_KEYS_FLAG) {
+                for(int i=0;i<key_list_size;i++) {
+                    if(key_types[i] == KEYTYPE_STRING) {                        
+                        if(available < 1) {
+                            pinfo->desegment_offset = original_offset;
+                            pinfo->desegment_len = 1;
+                            tvb_free(decrypted_tvb);
+                            return 0;
+                        }
+                        guint8 string_index = tvb_get_guint8(decrypted_tvb, dec_offset++); available--;
+                        if(string_index == 0xFF) {                            
+                            int str_remaining = tvb_reported_length_remaining(decrypted_tvb, dec_offset);
+                            gint len = tvb_strnlen(decrypted_tvb, dec_offset, str_remaining);
+                            if(len == -1) {
+                                pinfo->desegment_offset = original_offset;
+                                pinfo->desegment_len = DESEGMENT_ONE_MORE_SEGMENT;
+                                tvb_free(decrypted_tvb);
+                                return 0;
+                            }
+                            dec_offset += len + 1;
+                            available -= len+ 1;
+                        }
+                    } else if(key_types[i] == KEYTYPE_BYTE) {
+                        if(available < 1) {
+                            pinfo->desegment_offset = original_offset;
+                            pinfo->desegment_len = 1;
+                            tvb_free(decrypted_tvb);
+                            return 0;
+                        }
+                        dec_offset++;
+                        available--;
+                    } else if(key_types[i] == KEYTYPE_SHORT) {
+                        if(available < 2) {
+                            pinfo->desegment_offset = original_offset;
+                            pinfo->desegment_len = 2;
+                            tvb_free(decrypted_tvb);
+                            return 0;
+                        } 
+                        dec_offset += 2;
+                        available -= 2;
+                    }
+
                 }
-                dec_offset += len + 1;
-                available -= len+ 1;
+            }
+
+            if(flags & HAS_FULL_RULES_FLAG) {
+                printf("full keys\n");
             }
         }
-
     }
 
     //now that len is known... decrypt only the list response data
@@ -907,6 +939,10 @@ int dissect_sbv2_response_list_header(tvbuff_t* tvb, packet_info* pinfo, proto_t
 
     proto_tree_add_item(tree, sbv2_listresp_public_ip, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN); offset += sizeof(uint32_t);
     proto_tree_add_item(tree, sbv2_listresp_query_port, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN); offset += sizeof(uint16_t);
+
+    if(conv->list_req_options & NO_SERVER_LIST) {
+        return tvb_captured_length(tvb);
+    }
 
     guint32 num_keys;
     proto_tree_add_item_ret_uint(tree, sbv2_listresp_num_fields, tvb, offset, sizeof(uint8_t), ENC_BIG_ENDIAN, &num_keys); offset += sizeof(uint8_t);
@@ -1055,6 +1091,7 @@ int dissect_sbv2_adhoc_delete_msg(tvbuff_t* tvb, packet_info* pinfo, proto_tree*
     int offset = initial_offset;
     proto_tree_add_item(tree, sbv2_listresp_public_ip, tvb, offset, sizeof(uint32_t), ENC_BIG_ENDIAN); offset += sizeof(uint32_t);
     proto_tree_add_item(tree, sbv2_listresp_query_port, tvb, offset, sizeof(uint16_t), ENC_BIG_ENDIAN); offset += sizeof(uint16_t);
+    return offset;
 
 }
 int dissect_sbv2_adhoc_pushkeys_msg(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int initial_offset) {
