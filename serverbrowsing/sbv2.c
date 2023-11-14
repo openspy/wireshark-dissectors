@@ -459,6 +459,10 @@ typedef struct _sbv2_pdu_crypto_state {
     int len;
 } sbv2_pdu_crypto_state;
 
+int dissect_sbv2_server_key(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int initial_offset, FieldInfo *field, const char** popular_keys, int use_popular_list);
+int dissect_sbv2_adhoc_pushkeys_msg(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int initial_offset);
+int dissect_sbv2_adhoc_delete_msg(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, int initial_offset);
+
 static sbv2_conv_t* get_sbv2_conversation_data(packet_info* pinfo)
 {
     conversation_t* conversation;
@@ -660,7 +664,7 @@ static guint
     int enctypex_data_len = offset - original_offset;
     void *key_data = tvb_memdup(wmem_packet_scope(), tvb, original_offset, enctypex_data_len);
     
-    enctypex_init(&ctx, conv->query_from_game[2], conv->challenge, key_data, &enctypex_data_len, NULL);
+    enctypex_init(&ctx, conv->query_from_game[2], conv->challenge, key_data, &enctypex_data_len);
     memcpy(&conv->enctypex_data, &ctx, sizeof(ctx));
 
     guchar* decrypted_buffer = (guchar*)tvb_memdup(wmem_packet_scope(), tvb, offset, available);

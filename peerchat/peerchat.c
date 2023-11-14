@@ -159,8 +159,10 @@ int dissect_peerchat_challenge(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tr
                 strncpy(conv->server_challenge, server_challenge, PEERCHAT_CHALLENGE_LEN);
 
                 conv->challenge_setup = 1;
-                gs_peerchat_init(&conv->client_ctx, conv->client_challenge, conv->game_info[2]);
-                gs_peerchat_init(&conv->server_ctx, conv->server_challenge, conv->game_info[2]);
+                if(conv->game_info) {
+                    gs_peerchat_init(&conv->client_ctx, conv->client_challenge, conv->game_info[2]);
+                    gs_peerchat_init(&conv->server_ctx, conv->server_challenge, conv->game_info[2]);
+                }
             }
 
         }

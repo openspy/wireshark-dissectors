@@ -1,5 +1,6 @@
 #include "main.h"
 
+#include "serverbrowsing/serverbrowsing.h"
 #include "natneg/natneg.h"
 #include "peerchat/peerchat.h"
 #include "utmaster/main.h"

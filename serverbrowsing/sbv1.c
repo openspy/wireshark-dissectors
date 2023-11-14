@@ -1,4 +1,5 @@
 #include "serverbrowsing.h"
+#include "gsmsalg.h"
 
 int proto_sbv1 = -1;
 gint proto_sbv1_ett = -1;

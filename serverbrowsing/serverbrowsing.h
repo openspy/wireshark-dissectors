@@ -63,4 +63,8 @@ void proto_reg_handoff_sbv1(void);
 void proto_register_sbv2(void);
 void proto_reg_handoff_sbv2(void);
 
+int enctype2_wrapper(unsigned char *key, unsigned char *data, int size);
+int enctype1_wrapper(unsigned char *key, unsigned char *data, int size);
+int enctypex_func6(unsigned char *encxkey, unsigned char *data, int len);
+unsigned char *enctypex_init(unsigned char *encxkey, unsigned char *key, unsigned char *validate, unsigned char *data, int *datalen);
 #endif

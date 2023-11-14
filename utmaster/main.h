@@ -1,5 +1,5 @@
-#ifndef _MAIN_H
-#define _MAIN_H
+#ifndef _UTMAIN_H
+#define _UTMAIN_H
 #define WS_BUILD_DLL
 #define HAVE_PLUGINS
 
@@ -12,6 +12,7 @@
 #include <epan/packet.h>
 #include <epan/proto.h>
 #include <epan/conversation.h>
+#include <epan/dissectors/packet-tcp.h>
 
 #include <wsutil/wmem/wmem_core.h>
 
@@ -83,6 +84,6 @@ extern gint list_req_ett_foo;
 
 extern int proto_utms;
 
-void plugin_register_ut2004(void);
+void plugin_register_utmaster(void);
 
 #endif //_MAIN_H
