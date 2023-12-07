@@ -74,9 +74,11 @@ LICENSE
     http://www.gnu.org/licenses/gpl.txt
 */
 
+extern "C" {
+    unsigned char* gsseckey(
+        unsigned char* dst,
+        unsigned char* src,
+        unsigned char* key,
+        int           enctype);
 
-unsigned char *gsseckey(
-  unsigned char *dst,
-  unsigned char *src,
-  unsigned char *key,
-  int           enctype);
+}

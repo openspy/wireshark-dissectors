@@ -35,8 +35,9 @@ typedef struct _peerchat_conv_t {
 typedef struct _peerchat_pdu_crypto_state {
 	gs_peerchat_ctx state;
 } peerchat_pdu_crypto_state;
+extern "C" {
+	void plugin_register_peerchat(void);
+	int dissect_peerchat(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_);
 
-void plugin_register_peerchat(void);
-int dissect_peerchat(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_);
-
+}
 #endif //_GS_PEERCHAT_DISSECTOR_H

@@ -766,7 +766,7 @@
         proto_tree_add_item(tree, field, tvb, *offset, length, ENC_LITTLE_ENDIAN); *offset += length;
     }
 
-    const tvbuff_t* fstring_get_tvb(tvbuff_t* tvb, packet_info* pinfo _U_, proto_tree* tree _U_, void* data _U_, int offset) {
+    const guint8* fstring_get_tvb(tvbuff_t* tvb, packet_info* pinfo _U_, proto_tree* tree _U_, void* data _U_, int offset) {
         int fstring_len_size = 0;
         int length = DecodeCompact(tvb, &fstring_len_size, offset); offset += fstring_len_size;
 
@@ -813,7 +813,7 @@
         dissect_fstring(tvb, pinfo, tree, data, &offset, cdkey_response_field);
     
 
-        const tvbuff_t* client_name_buf = fstring_get_tvb(tvb, pinfo, tree, data, offset);
+        const guint8* client_name_buf = fstring_get_tvb(tvb, pinfo, tree, data, offset);
         const char* client_name = (const char*)client_name_buf;
 
         if (strstr(client_name, "SERVER") != NULL) {
@@ -1101,7 +1101,7 @@
         if (conv_data->utms_client_version >= 3000) {
             proto_tree_add_item(tree, motd_response_unknown, tvb, offset, sizeof(uint32_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint32_t);
         }
-        
+        return tvb_captured_length(tvb);
     }
 
     static int

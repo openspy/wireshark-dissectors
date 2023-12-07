@@ -1,6 +1,6 @@
 #ifndef _MAIN_H
 #define _MAIN_H
-#define WS_BUILD_DLL
+//#define WS_BUILD_DLL
 #define HAVE_PLUGINS
 
 
