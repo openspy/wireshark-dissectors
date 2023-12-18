@@ -810,7 +810,35 @@ extern "C" {
                 }
 
                 if(flags & HAS_FULL_RULES_FLAG) {
-                    printf("full keys\n");
+                    do {
+                        int str_remaining = tvb_reported_length_remaining(decrypted_tvb, dec_offset); //key
+                        gint len = tvb_strnlen(decrypted_tvb, dec_offset, str_remaining);
+                        if (len == 0) {
+                            dec_offset += 1;
+                            available -= 1;
+                            break;
+                        }
+                        if (len == -1) {
+                            pinfo->desegment_offset = original_offset;
+                            pinfo->desegment_len = 2;
+                            tvb_free(decrypted_tvb);
+                            return 0;
+                        }
+                        dec_offset += len + 1;
+                        available -= len + 1;
+
+                        str_remaining = tvb_reported_length_remaining(decrypted_tvb, dec_offset); //value
+                        len = tvb_strnlen(decrypted_tvb, dec_offset, str_remaining);
+                        if (len == -1) {
+                            pinfo->desegment_offset = original_offset;
+                            pinfo->desegment_len = 2;
+                            tvb_free(decrypted_tvb);
+                            return 0;
+                        }
+                        dec_offset += len + 1;
+                        available -= len + 1;
+                    } while (1);
+
                 }
             }
         }
@@ -888,6 +916,7 @@ extern "C" {
                 int str_remaining = tvb_reported_length_remaining(tvb, len + offset);
                 gint str_len = tvb_strnlen(tvb, len + offset, str_remaining);
                 if(str_len == 0) {
+                    len++;
                     break;
                 }
                 proto_tree_add_item(subtree, sbv2_listresp_server_field_keyvalue_string, tvb, len + offset, str_len + 1, ENC_BIG_ENDIAN); len += str_len + 1;
