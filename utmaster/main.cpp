@@ -30,6 +30,10 @@
     int cpu_cycles_field = -1;
     int running_cpu_field = -1;
 
+    //server challenge response fields
+    int gamestats_id = -1;
+    int utan_bans_disabled = -1;
+
     //server validation response
     int validation_response_status_field = -1;
     int validation_response_unknown_field = -1;
@@ -228,6 +232,19 @@
        { &running_cpu_field,
             { "running_cpu", "utms.client_challenge_resp.running_cpu",
             FT_UINT8, BASE_DEC,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+        //server challenge response fields
+       { &gamestats_id,
+            { "gamestats_id", "utms.client_challenge_resp.gamestats_id", //technically server response but just keep them together i guess
+            FT_UINT32, BASE_HEX,
+            NULL, 0x0,
+            NULL, HFILL }
+        },
+       { &utan_bans_disabled,
+            { "utan_bans_disabled", "utms.client_challenge_resp.utan_bans_disabled", //technically server response but just keep them together i guess
+            FT_UINT8, BASE_HEX,
             NULL, 0x0,
             NULL, HFILL }
         },
@@ -832,14 +849,16 @@
         dissect_fstring(tvb, pinfo, tree, data, &offset, language_field);
 
         if (conv_data->utms_client_version >= 3000) {
-            guint32 gpu_device;
-            proto_tree_add_item_ret_uint(tree, gpu_device_id_field, tvb, offset, sizeof(uint32_t), ENC_LITTLE_ENDIAN, &gpu_device); offset += sizeof(uint32_t);
             if (!conv_data->utms_is_gameserver) {
+                proto_tree_add_item(tree, gpu_device_id_field, tvb, offset, sizeof(uint32_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint32_t);            
                 proto_tree_add_item(tree, gpu_vendor_id_field, tvb, offset, sizeof(uint32_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint32_t);
-                proto_tree_add_item(tree, cpu_cycles_field, tvb, offset, sizeof(uint32_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint32_t);
+                proto_tree_add_item(tree, cpu_cycles_field, tvb, offset, sizeof(uint32_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint32_t);           
+                proto_tree_add_item(tree, running_cpu_field, tvb, offset, sizeof(uint8_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint8_t);
             }
-
-            proto_tree_add_item(tree, running_cpu_field, tvb, offset, sizeof(uint8_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint8_t);
+            else {
+                proto_tree_add_item(tree, gamestats_id, tvb, offset, sizeof(uint32_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint32_t);
+                proto_tree_add_item(tree, utan_bans_disabled, tvb, offset, sizeof(uint8_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint8_t);
+            }
 
         }
 
@@ -1022,6 +1041,9 @@
         proto_tree_add_item_ret_uint(tree, server_hb_submit_num_player_entries, tvb, offset, sizeof(uint8_t), ENC_LITTLE_ENDIAN, &num_fields); offset += sizeof(uint8_t);
         for (int i = 0; i < num_fields; i++) {            
             proto_tree_add_item(tree, server_hb_submit_player_id, tvb, offset, sizeof(uint32_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint32_t);
+            if (conv_data->utms_client_version == 2226) { //UT2XMP fix
+                proto_tree_add_item(tree, server_hb_submit_player_id, tvb, offset, sizeof(uint32_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint32_t);
+            }
 
             dissect_fstring(tvb, pinfo, tree, data, &offset, server_hb_submit_player_name);
             proto_tree_add_item(tree, server_hb_submit_player_ping, tvb, offset, sizeof(uint32_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint32_t);
@@ -1126,7 +1148,10 @@
         dissect_fstring(tvb, pinfo, subtree, data, &offset, server_list_resp_game_group);
         proto_tree_add_item(subtree, server_list_resp_num_players, tvb, offset, sizeof(uint8_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint8_t);
         proto_tree_add_item(subtree, server_list_resp_max_players, tvb, offset, sizeof(uint8_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint8_t);
-        proto_tree_add_item(subtree, server_list_resp_server_flags, tvb, offset, sizeof(uint32_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint32_t);
+
+        if (conv_data->utms_client_version != 2226) { //UT2XMP fix
+            proto_tree_add_item(subtree, server_list_resp_server_flags, tvb, offset, sizeof(uint32_t), ENC_LITTLE_ENDIAN); offset += sizeof(uint32_t);
+        }
 
         if (conv_data->utms_client_version >= 3000) {
             dissect_fstring(tvb, pinfo, subtree, data, &offset, server_list_resp_bot_settings);
