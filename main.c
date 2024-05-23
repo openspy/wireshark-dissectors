@@ -4,6 +4,7 @@
 #include "natneg/natneg.h"
 #include "peerchat/peerchat.h"
 #include "utmaster/main.h"
+#include "qr2/qr2.h"
 
 #include "gslist_keys.h"
 
@@ -20,6 +21,7 @@ void plugin_register(void)
     plugin_register_peerchat();
     plugin_register_serverbrowsing();
     plugin_register_utmaster();
+    plugin_register_qr2();
 }
 
 const char** gslist_keys_find_by_gamename(const char* name, int len) {

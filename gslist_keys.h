@@ -3109,8 +3109,12 @@ char *gslist_keys[][3] = {
     { "ZDoom", "zdoom", "MIr0wW" },
     { "ZeroG (DS)", "zeroGds", "ViuPw7" },
     { "Zuma Deluxe", "ZumaDeluxe", "bxYYnG" },
+
+    //gamespy games (missing from usual data)
+    {"Crysis 2", "capricorn", "8TTq4M"},
     
     //non-gamespy games
     { "T.H.U.G. Pro", "thugpro", "AdLWaZ" },
+    {"reTHAWed", "rethawed", "5TqBvc"},
     { NULL, NULL, NULL }
 };

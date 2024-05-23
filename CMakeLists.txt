@@ -11,8 +11,9 @@ file (GLOB NATNEG_SRCS "natneg/*.c")
 file (GLOB PEERCHAT_SRCS "peerchat/*.c")
 file (GLOB SERVERBROWSING_SRCS "serverbrowsing/*.c")
 file (GLOB UT2MASTER_SRCS "utmaster/*.c")
+file (GLOB QR2_SRCS "qr2/*.c")
 
-set (ALL_SRCS ${MAIN_SRCS} ${MAIN_HDRS} ${NATNEG_SRCS} ${PEERCHAT_SRCS} ${SERVERBROWSING_SRCS} ${UT2MASTER_SRCS})
+set (ALL_SRCS ${MAIN_SRCS} ${MAIN_HDRS} ${NATNEG_SRCS} ${PEERCHAT_SRCS} ${SERVERBROWSING_SRCS} ${UT2MASTER_SRCS} ${QR2_SRCS})
 
 # include_directories (${CMAKE_CURRENT_SOURCE_DIR} /usr/include/glib-2.0 /usr/lib/x86_64-linux-gnu/glib-2.0/include /usr/include/wireshark)
 #include_directories (${CMAKE_CURRENT_SOURCE_DIR} C:\code\wireshark-win64-libs\vcpkg-export-20220726-1-win64ws\installed\x64-windows\lib\glib-2.0\include C:\code\extern\include C:\code\wireshark\include C:\code\wireshark C:\code\wireshark-win64-libs\vcpkg-export-20220726-1-win64ws\installed\x64-windows\include\glib-2.0)
