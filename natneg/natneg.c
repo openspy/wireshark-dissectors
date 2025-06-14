@@ -173,7 +173,7 @@ void proto_reg_handoff_natneg(void)
 
     natneg_handle = create_dissector_handle(dissect_natneg, proto_natneg);
 
-    heur_dissector_add("udp", dissect_natneg_heur_udp, "GameSpy NatNeg",
+    heur_dissector_add("udp", (heur_dissector_t)dissect_natneg_heur_udp, "GameSpy NatNeg",
         "gs_natneg", proto_natneg, HEURISTIC_ENABLE);
 }
 

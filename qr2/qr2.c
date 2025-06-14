@@ -99,7 +99,7 @@ void proto_reg_handoff_qr2(void)
 
     qr2_handle = create_dissector_handle(dissect_qr2, proto_qr2);
 
-    heur_dissector_add("udp", dissect_qr2_heur_udp, "GameSpy QR2",
+    heur_dissector_add("udp", (heur_dissector_t)dissect_qr2_heur_udp, "GameSpy QR2",
         "gs_qr2", proto_qr2, HEURISTIC_ENABLE);
 }
 

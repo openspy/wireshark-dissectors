@@ -696,28 +696,28 @@
 
     int DecodeCompact(tvbuff_t* tvb, int *Count, int offset)
     {
-        int Value = 0;
+        unsigned int Value = 0;
 
         *Count = 1;
 
-        char B[5];
+        unsigned char B[5];
 
-        B[0] = tvb_get_guint8(tvb, offset++);
+        B[0] = tvb_get_uint8(tvb, offset++);
         if ((B[0] & 0x40) != 0)
         {
-            B[1] = tvb_get_guint8(tvb, offset++);
+            B[1] = tvb_get_uint8(tvb, offset++);
             *Count = *Count + 1;
             if ((B[1] & 0x80) != 0)
             {
-                B[2] = tvb_get_guint8(tvb, offset++);
+                B[2] = tvb_get_uint8(tvb, offset++);
                 *Count = *Count + 1;
                 if ((B[2] & 0x80) != 0)
                 {
-                    B[3] = tvb_get_guint8(tvb, offset++);
+                    B[3] = tvb_get_uint8(tvb, offset++);
                     *Count = *Count + 1;
                     if ((B[3] & 0x80) != 0)
                     {
-                        B[4] = tvb_get_guint8(tvb, offset++);
+                        B[4] = tvb_get_uint8(tvb, offset++);
                         *Count = *Count + 1;
                         Value = B[4];
                     }
@@ -728,8 +728,9 @@
             Value = (Value << 7) + (B[1] & 0x7f);
         }
         Value = (Value << 6) + (B[0] & 0x3f);
-        if ((B[0] & 0x80) != 0)
-            Value = -Value;
+        if ((B[0] & 0x80) != 0) {
+            Value *= 2;
+        }
         return Value;
     }
 
@@ -760,7 +761,7 @@
         int count = 0;
         int length = DecodeCompact(tvb, &count, *offset);
 
-        //proto_tree_add_int(tree, fstrlen_field, tvb, *offset, count, length);
+        proto_tree_add_int(tree, fstrlen_field, tvb, *offset, count, length);
         *offset += count;
 
         proto_tree_add_item(tree, field, tvb, *offset, length, ENC_LITTLE_ENDIAN); *offset += length;
