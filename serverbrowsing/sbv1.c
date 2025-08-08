@@ -13,8 +13,22 @@ int sbv1_validation_status = -1;
 int sbv1_client_validation_expected = -1;
 int sbv1_server_cmp_resp_ip = -1;
 int sbv1_server_cmp_resp_port = -1;
+int sbv1_cryptkey_len = -1;
+int sbv1_cryptkey_data = -1;
 
 static hf_register_info sbv1_fields_hf[] = {
+    { &sbv1_cryptkey_len,
+        { "cryptkey_len", "sbv1.cryptkey_len",
+        FT_UINT8, BASE_DEC,
+        NULL, 0x0,
+        NULL, HFILL }
+    },
+    { &sbv1_cryptkey_data,
+        { "cryptkey_data", "sbv1.cryptkey_data",
+        FT_BYTES, BASE_NONE,
+        NULL, 0x0,
+        NULL, HFILL }
+    },
     //crypt command properties
     { &sbv1_server_challenge,
         { "server_challenge", "sbv1.server_challenge",
@@ -147,6 +161,9 @@ int dissect_sbv1_client_validation(tvbuff_t* tvb, packet_info* pinfo, proto_tree
     proto_tree_add_item_ret_string(tree, sbv1_from_gamename, tvb, offset, end, ENC_ASCII, wmem_packet_scope(), &gamename);
 
     conv->query_from_game = gslist_keys_find_by_gamename(gamename, end);
+    if(conv->query_from_game == NULL) {
+        return tvb_captured_length(tvb); 
+    }
 
     if(strstr((const char *)buff,"\\enctype\\2") != NULL) {
         conv->enctype = 2;
@@ -208,6 +225,19 @@ int dissect_sbv1_query_response_cmp_list(tvbuff_t* tvb, packet_info* pinfo, prot
     }
     return tvb_captured_length(tvb);
 }
+void dissect_sbv1_enctype2_header(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_, const char *secretkey) {
+    int offset = 0;
+    guint8 len = tvb_get_guint8(tvb, offset); offset++;
+    len ^= 0xEC;
+    char cryptkey_data[256];
+    int secret_len = strlen(secretkey); //should be 6...
+    for(int i=0;i<len;i++) {
+        cryptkey_data[i] = (char)tvb_get_guint8(tvb, offset++);
+        cryptkey_data[i] ^= secretkey[i%secret_len];
+    }
+    proto_tree_add_uint(tree, sbv1_cryptkey_len, tvb, 0, sizeof(uint8_t), len); offset += sizeof(uint32_t);
+    proto_tree_add_bytes(tree, sbv1_cryptkey_data, tvb, offset, len, (char *)&cryptkey_data[0]);
+}
 int dissect_sbv1_query_response(tvbuff_t* tvb, packet_info* pinfo, proto_tree* tree _U_, void* data _U_) {
     sbv1_conv_t* conv = get_sbv1_conversation_data(pinfo);
 
@@ -224,6 +254,7 @@ int dissect_sbv1_query_response(tvbuff_t* tvb, packet_info* pinfo, proto_tree* t
                 dec_len = enctype1_wrapper(conv->query_from_game[2], decrypted_heap_buffer, original_length);
             break;
             case 2:
+                dissect_sbv1_enctype2_header(tvb, pinfo, tree, data, conv->query_from_game[2]);
                 dec_len = enctype2_wrapper(conv->query_from_game[2], decrypted_heap_buffer, original_length);
             break;
         }
